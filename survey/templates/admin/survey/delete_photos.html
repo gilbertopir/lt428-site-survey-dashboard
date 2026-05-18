@@ -1,0 +1,129 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+
+<h2>Delete Route Photos</h2>
+<p style="color:#666; margin-bottom:20px;">
+    Reads the Photo column from the route's Excel file and deletes only the photos
+    referenced by that route. Other routes' photos are never touched.
+</p>
+
+{% if messages %}
+<ul style="list-style:none; padding:0; margin-bottom:20px;">
+    {% for message in messages %}
+    <li style="padding:10px 16px; border-radius:6px; margin-bottom:8px; font-size:13px;
+               background:{% if message.tags == 'success' %}#e8f5e9{% else %}#fdecea{% endif %};
+               border:1px solid {% if message.tags == 'success' %}#27ae60{% else %}#e74c3c{% endif %};
+               color:#000;">{{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<!-- Step 1: Select route and preview -->
+{% if not photo_preview %}
+<div style="background:#f9f9f9; border:1px solid #ddd; border-radius:8px;
+            padding:20px 24px; margin-bottom:20px;">
+    <h3 style="margin-top:0; font-size:14px; color:#333;">Step 1 — Select Route</h3>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="preview">
+        <select name="route_id"
+                style="font-size:13px; padding:6px 10px; border-radius:4px;
+                       border:1px solid #ccc; margin-right:10px; min-width:200px;">
+            {% for rid, info in routes.items %}
+            <option value="{{ rid }}">{{ rid }} — {{ info.label }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="button default">Preview Photos →</button>
+    </form>
+    <p style="margin-top:10px; font-size:12px; color:#888;">
+        This will read the Excel file and show you exactly which photos will be deleted
+        before you confirm.
+    </p>
+</div>
+
+{% else %}
+<!-- Step 2: Preview and confirm -->
+<div style="background:#f9f9f9; border:1px solid #ddd; border-radius:8px;
+            padding:20px 24px; margin-bottom:20px;">
+    <h3 style="margin-top:0; font-size:14px; color:#333;">
+        Step 2 — Confirm Deletion for {{ photo_preview.route_id }}
+    </h3>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+
+        <div style="background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:14px;">
+            <b style="font-size:13px;">📷 Feature Photos</b>
+            <div style="margin-top:6px; font-size:12px; color:#555;">
+                {{ photo_preview.feat_exist|length }} of {{ photo_preview.feat_files|length }}
+                referenced photos found on disk
+            </div>
+            {% if photo_preview.feat_exist %}
+            <div style="margin-top:8px; max-height:120px; overflow-y:auto;
+                        font-size:11px; color:#888; line-height:1.8;">
+                {% for f in photo_preview.feat_exist %}
+                <div>{{ f }}</div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="margin-top:8px; font-size:12px; color:#999;">No photos found on disk</div>
+            {% endif %}
+        </div>
+
+        <div style="background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:14px;">
+            <b style="font-size:13px;">🔀 Passing Place Photos</b>
+            <div style="margin-top:6px; font-size:12px; color:#555;">
+                {{ photo_preview.pp_exist|length }} of {{ photo_preview.pp_files|length }}
+                referenced photos found on disk
+            </div>
+            {% if photo_preview.pp_exist %}
+            <div style="margin-top:8px; max-height:120px; overflow-y:auto;
+                        font-size:11px; color:#888; line-height:1.8;">
+                {% for f in photo_preview.pp_exist %}
+                <div>{{ f }}</div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="margin-top:8px; font-size:12px; color:#999;">No photos found on disk</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% with total=photo_preview.total %}
+    {% if total > 0 %}
+    <div style="background:#fdecea; border:1px solid #e74c3c; border-radius:6px;
+                padding:12px 16px; margin-bottom:16px; font-size:13px; color:#000;">
+        ⚠ This will permanently delete <b>{{ total }} photo{{ total|pluralize }}</b>
+        from disk. This cannot be undone.
+    </div>
+
+    <form method="post"
+          onsubmit="return confirm('Permanently delete {{ total }} photos for {{ photo_preview.route_id }}? This cannot be undone.')">
+        {% csrf_token %}
+        <input type="hidden" name="action"    value="delete">
+        <input type="hidden" name="route_id"  value="{{ photo_preview.route_id }}">
+        <input type="hidden" name="confirmed" value="yes">
+        <button type="submit"
+                style="background:#e74c3c; color:white; border:none; border-radius:5px;
+                       padding:9px 24px; font-size:13px; font-weight:600; cursor:pointer;
+                       margin-right:10px;">
+            🗑 Delete {{ total }} Photo{{ total|pluralize }}
+        </button>
+        <a href="/admin/survey/mapgenerationlog/delete-photos/"
+           class="button" style="background:#6c757d;">Cancel</a>
+    </form>
+    {% else %}
+    <p style="color:#999; font-size:13px;">No photos found on disk for this route — nothing to delete.</p>
+    <a href="/admin/survey/mapgenerationlog/delete-photos/"
+       class="button" style="background:#6c757d;">← Back</a>
+    {% endif %}
+    {% endwith %}
+
+</div>
+{% endif %}
+
+<a href="/admin/survey/mapgenerationlog/" class="button"
+   style="background:#6c757d; margin-top:8px; display:inline-block;">
+    ← Back to Dashboard
+</a>
+
+{% endblock %}

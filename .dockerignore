@@ -1,0 +1,17 @@
+# Never copy these into the Docker image
+.env
+.git
+.gitignore
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+Thumbs.db
+
+# Data stays in volumes, not in image
+data/
+media/
+db.sqlite3
+staticfiles/

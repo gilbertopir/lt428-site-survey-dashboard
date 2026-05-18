@@ -1,0 +1,270 @@
+{% extends "survey/base.html" %}
+{% block title %}Overview{% endblock %}
+{% block nav_overview %}active{% endblock %}
+
+{% block extra_head %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+    .overview-layout {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        height: calc(100vh - 56px);
+        overflow: hidden;
+    }
+
+    /* ── LEFT panel ─────────────────────────────────────────── */
+    .cards-panel {
+        overflow-y: auto;
+        background: #0f0f0f;
+        border-right: 1px solid #2e2e2e;
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .panel-heading { padding-bottom: 10px; border-bottom: 1px solid #2e2e2e; }
+    .panel-heading h1 { font-size: 1.05rem; margin: 0; color: #f0f0f0; }
+    .panel-heading p  { font-size: 0.72rem; color: #666; margin: 3px 0 0; }
+
+    .btn-zoom-all {
+        width: 100%;
+        background: #151515;
+        color: #888;
+        border: 1px solid #2e2e2e;
+        border-radius: 5px;
+        padding: 7px;
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-zoom-all:hover { background: var(--tgp-navy); color: white; border-color: var(--tgp-navy); }
+
+    /* ── Route card ─────────────────────────────────────────── */
+    .route-card {
+        background: #1a1a1a;
+        border: 1px solid #2e2e2e;
+        border-left: 4px solid var(--tgp-navy);
+        border-radius: 6px;
+        padding: 13px 14px;
+        cursor: pointer;
+        transition: border-left-color 0.2s, background 0.15s;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+    }
+    .route-card:hover { border-left-color: var(--tgp-red); background: #202020; }
+    .route-card.active { border-left-color: var(--tgp-red); background: #222; }
+
+    .card-header-row { display: flex; justify-content: space-between; align-items: flex-start; }
+    .card-id   { font-family: 'Roboto Condensed', sans-serif; font-size: 1.2rem; font-weight: 700; color: #f0f0f0; line-height: 1; }
+    .card-label { font-size: 0.7rem; color: #777; margin-top: 3px; }
+    .dxf-badge  { font-size: 0.6rem; background: #051b63; color: #aac4ff; padding: 2px 7px; border-radius: 3px; font-weight: 600; white-space: nowrap; }
+
+    .card-stats { display: flex; gap: 6px; }
+    .card-stat  { flex: 1; background: #111; border-radius: 4px; padding: 5px 3px; text-align: center; }
+    .card-stat .val { font-family: 'Roboto Condensed', sans-serif; font-size: 1.05rem; font-weight: 700; color: #f0f0f0; line-height: 1; }
+    .card-stat .lbl { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.5px; color: #555; margin-top: 2px; }
+
+    .condition-bar { height: 5px; border-radius: 3px; overflow: hidden; background: #2e2e2e; display: flex; }
+    .condition-labels { display: flex; justify-content: space-between; font-size: 0.65rem; margin-bottom: 3px; }
+    .bar-good { background: var(--good); }
+    .bar-fair { background: var(--fair); }
+    .bar-poor { background: var(--poor); }
+
+    .card-actions { display: flex; gap: 6px; }
+    .btn-card {
+        flex: 1; text-align: center; padding: 6px 4px; border-radius: 4px;
+        font-family: 'Roboto Condensed', sans-serif; font-weight: 700;
+        font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px;
+        text-decoration: none !important; transition: background 0.2s;
+    }
+    .btn-card-primary   { background: var(--tgp-navy); color: white !important; }
+    .btn-card-primary:hover { background: var(--tgp-red); }
+    .btn-card-secondary { background: #2a2a2a; color: #999 !important; border: 1px solid #333; }
+    .btn-card-secondary:hover { background: #333; color: white !important; }
+
+    /* ── RIGHT: map ─────────────────────────────────────────── */
+    .map-panel { position: relative; }
+    #overview-map { width: 100%; height: 100%; }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="overview-layout">
+
+    <!-- LEFT: cards -->
+    <div class="cards-panel">
+        <div class="panel-heading">
+            <h1>LT428 — Banniskirk to Carnaig</h1>
+            <p>{{ route_cards|length }} route{{ route_cards|length|pluralize }} &nbsp;·&nbsp; Click card to zoom</p>
+        </div>
+
+        <button class="btn-zoom-all" onclick="zoomAll()">
+            <i class="bi bi-arrows-fullscreen me-1"></i> Zoom to All Routes
+        </button>
+
+        {% for card in route_cards %}
+        {% if card.error %}
+        <div class="route-card" style="border-left-color:var(--poor);opacity:0.7">
+            <div class="card-id">{{ card.route_id }}</div>
+            <div style="color:#e74c3c;font-size:0.78rem">⚠ {{ card.error }}</div>
+        </div>
+
+        {% else %}
+        {% with total=card.n_good|add:card.n_fair|add:card.n_poor %}
+        <div class="route-card"
+             id="card-{{ card.route_id }}"
+             onclick="zoomToRoute('{{ card.route_id }}')">
+
+            <div class="card-header-row">
+                <div>
+                    <div class="card-id">{{ card.route_id }}</div>
+                    <div class="card-label">{{ card.info.label }}</div>
+                </div>
+                {% if card.has_dxf %}<span class="dxf-badge">DXF ✓</span>{% endif %}
+            </div>
+
+            <div class="card-stats">
+                <div class="card-stat">
+                    <div class="val">{{ card.n_features }}</div>
+                    <div class="lbl">Features</div>
+                </div>
+                <div class="card-stat">
+                    <div class="val">{{ card.n_pp }}</div>
+                    <div class="lbl">Passing Pl.</div>
+                </div>
+                <div class="card-stat">
+                    <div class="val">{{ card.ch_max|floatformat:0 }}</div>
+                    <div class="lbl">Length (m)</div>
+                </div>
+            </div>
+
+            {% if total > 0 %}
+            <div>
+                <div class="condition-labels">
+                    <span style="color:var(--good)">● {{ card.n_good }} Good</span>
+                    <span style="color:var(--fair)">● {{ card.n_fair }} Fair</span>
+                    <span style="color:var(--poor)">● {{ card.n_poor }} Poor</span>
+                </div>
+                <div class="condition-bar">
+                    {% if card.n_good %}<div class="bar-good" style="width:{% widthratio card.n_good total 100 %}%"></div>{% endif %}
+                    {% if card.n_fair %}<div class="bar-fair" style="width:{% widthratio card.n_fair total 100 %}%"></div>{% endif %}
+                    {% if card.n_poor %}<div class="bar-poor" style="width:{% widthratio card.n_poor total 100 %}%"></div>{% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card-actions" onclick="event.stopPropagation()">
+                <a href="{% url 'survey:route_detail' card.route_id %}" class="btn-card btn-card-primary">Map &amp; Table →</a>
+                <a href="{% url 'survey:route_report' card.route_id %}"  class="btn-card btn-card-secondary">Report</a>
+            </div>
+        </div>
+        {% endwith %}
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- RIGHT: map -->
+    <div class="map-panel">
+        <div id="overview-map"></div>
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<!-- Leaflet JS -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var ROUTES    = {{ map_routes|safe }};
+var ALL_BOUNDS = {{ all_bounds|safe }};
+
+// Initialise Leaflet map
+var map = L.map('overview-map', { zoomControl: true });
+
+L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles &copy; Esri', maxZoom: 19 }
+).addTo(map);
+
+// Draw each route
+ROUTES.forEach(function(r) {
+    // Route line
+    L.polyline(r.coords, { color: '#ffffff', weight: 3, opacity: 0.85 })
+     .addTo(map)
+     .bindTooltip(r.route_id + ' alignment');
+
+    // Centre marker with popup
+    var popup = '<div style="font-family:sans-serif;min-width:170px;font-size:12px">'
+        + '<b style="font-size:13px">' + r.route_id + '</b><br>'
+        + '<span style="color:#666;font-size:11px">' + r.label + '</span>'
+        + '<hr style="margin:5px 0">'
+        + '<table style="width:100%;font-size:12px">'
+        + '<tr><td>Features</td><td><b>' + r.n_features + '</b></td></tr>'
+        + '<tr><td>Passing Places</td><td><b>' + r.n_pp + '</b></td></tr>'
+        + '<tr><td colspan="2">'
+        + '<span style="color:#27ae60">&#9679;</span> ' + r.n_good + ' &nbsp;'
+        + '<span style="color:#f39c12">&#9679;</span> ' + r.n_fair + ' &nbsp;'
+        + '<span style="color:#e74c3c">&#9679;</span> ' + r.n_poor
+        + '</td></tr></table>'
+        + '<a href="/route/' + r.route_id + '/" '
+        + 'style="display:block;margin-top:8px;background:#051b63;color:white;'
+        + 'text-align:center;padding:5px;border-radius:4px;text-decoration:none;font-weight:600">'
+        + 'Open Route &rarr;</a></div>';
+
+    L.marker(r.center)
+     .addTo(map)
+     .bindPopup(popup, { maxWidth: 220 })
+     .bindTooltip(r.route_id + ' — ' + r.n_features + ' features');
+});
+
+// Fit to all routes on load
+if (ALL_BOUNDS) {
+    map.fitBounds([
+        [ALL_BOUNDS.lat_min, ALL_BOUNDS.lon_min],
+        [ALL_BOUNDS.lat_max, ALL_BOUNDS.lon_max]
+    ]);
+}
+
+// Zoom to a single route
+function zoomToRoute(routeId) {
+    document.querySelectorAll('.route-card').forEach(function(c) { c.classList.remove('active'); });
+    var card = document.getElementById('card-' + routeId);
+    if (card) card.classList.add('active');
+
+    var r = ROUTES.find(function(x) { return x.route_id === routeId; });
+    if (r) {
+        map.fitBounds(
+            [[r.bounds.lat_min, r.bounds.lon_min], [r.bounds.lat_max, r.bounds.lon_max]],
+            { animate: true, duration: 0.8, padding: [40, 40] }
+        );
+    }
+}
+
+// Reset to all routes
+function zoomAll() {
+    document.querySelectorAll('.route-card').forEach(function(c) { c.classList.remove('active'); });
+    if (ALL_BOUNDS) {
+        map.fitBounds(
+            [[ALL_BOUNDS.lat_min, ALL_BOUNDS.lon_min], [ALL_BOUNDS.lat_max, ALL_BOUNDS.lon_max]],
+            { animate: true, duration: 0.8 }
+        );
+    }
+}
+</script>
+
+    });
+    var el = document.getElementById('route-search-count');
+    if (el) {
+        el.textContent = query ? (shown + ' of ' + cards.length + ' routes') : '';
+        el.style.color = (shown === 0 && query) ? '#e74c3c' : '#555';
+    }
+}
+
+{% endblock %}

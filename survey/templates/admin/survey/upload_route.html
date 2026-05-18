@@ -1,0 +1,84 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+
+<h2>Upload Route Data</h2>
+
+{% if messages %}
+<ul style="list-style:none; padding:0; margin-bottom:20px;">
+    {% for message in messages %}
+    <li style="padding:10px 16px; border-radius:6px; margin-bottom:8px; font-size:13px;
+               background:{% if message.tags == 'success' %}#e8f5e9{% else %}#fdecea{% endif %};
+               border:1px solid {% if message.tags == 'success' %}#27ae60{% else %}#e74c3c{% endif %};
+               color:#000;">{{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<form method="POST" enctype="multipart/form-data" action="">
+    {% csrf_token %}
+
+    <fieldset class="module aligned">
+        <h2>Survey Data Files</h2>
+
+        <div class="form-row">
+            <label for="xlsx_file">Excel Survey File (.xlsx)</label>
+            <input type="file" name="xlsx_file" id="xlsx_file" accept=".xlsx">
+            <p class="help" style="color:#555; font-size:12px;">
+                Filename prefix sets the Route ID — e.g. <code>PR501_survey.xlsx</code> creates route <b>PR501</b>.
+                Must contain sheets named <b>Features</b> and <b>Passing Places</b>.
+            </p>
+        </div>
+
+        <div class="form-row">
+            <label for="dxf_file">DXF Alignment File (.dxf) <span style="font-weight:normal; color:#888">(optional)</span></label>
+            <input type="file" name="dxf_file" id="dxf_file" accept=".dxf">
+            <p class="help" style="color:#555; font-size:12px;">
+                Filename prefix must match the xlsx. Used for accurate road centreline on maps.
+                Without it the line is estimated from GPS points.
+            </p>
+        </div>
+    </fieldset>
+
+    <fieldset class="module aligned">
+        <h2>Feature Photos</h2>
+        <div class="form-row">
+            <label for="feature_photos">Photos (.jpg .png) or zip</label>
+            <input type="file" name="feature_photos" id="feature_photos"
+                   accept=".jpg,.jpeg,.png,.zip" multiple>
+            <p class="help" style="color:#555; font-size:12px;">
+                Hold <code>Ctrl</code> to select multiple photos, or select a single zip file.
+                Filenames must exactly match the <b>Photo</b> column in the Features sheet.
+            </p>
+        </div>
+    </fieldset>
+
+    <fieldset class="module aligned">
+        <h2>Passing Place Photos</h2>
+        <div class="form-row">
+            <label for="pp_photos">Photos (.jpg .png) or zip</label>
+            <input type="file" name="pp_photos" id="pp_photos"
+                   accept=".jpg,.jpeg,.png,.zip" multiple>
+            <p class="help" style="color:#555; font-size:12px;">
+                Same as feature photos but for passing places.
+                Filenames must exactly match the <b>Photo</b> column in the Passing Places sheet.
+            </p>
+        </div>
+    </fieldset>
+
+    <div class="submit-row">
+        <input type="submit" value="Upload Files" class="default">
+        <a href="/admin/survey/mapgenerationlog/" class="button cancel-link"
+           style="margin-left:10px;">Cancel</a>
+    </div>
+
+    <p style="margin-top:16px; padding:10px 14px; background:#fff8e1;
+              border:1px solid #f39c12; border-radius:5px; font-size:12px; color:#000;">
+        <b>After uploading:</b> Go to
+        <a href="/admin/survey/mapgenerationlog/generate/">Generate Maps</a>
+        to create aerial images for the new route.
+    </p>
+
+</form>
+
+{% endblock %}

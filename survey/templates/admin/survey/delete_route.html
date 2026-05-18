@@ -1,0 +1,76 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+
+<h2>Delete Route Files</h2>
+<p style="color:#666; margin-bottom:20px;">
+    Removes the Excel and DXF files for a route from the <code>/data/</code> folder.
+    The route will disappear from the app immediately. Photos are <b>not</b> affected.
+</p>
+
+{% if messages %}
+<ul style="list-style:none; padding:0; margin-bottom:20px;">
+    {% for message in messages %}
+    <li style="padding:10px 16px; border-radius:6px; margin-bottom:8px; font-size:13px;
+               background:{% if message.tags == 'success' %}#e8f5e9{% else %}#fdecea{% endif %};
+               border:1px solid {% if message.tags == 'success' %}#27ae60{% else %}#e74c3c{% endif %};
+               color:#000;">{{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if routes %}
+<table style="width:100%; border-collapse:collapse; font-size:13px; margin-bottom:24px;">
+    <thead>
+        <tr style="background:#f5f5f5; border-bottom:2px solid #ddd;">
+            <th style="padding:10px 14px; text-align:left;">Route ID</th>
+            <th style="padding:10px 14px; text-align:left;">Excel File</th>
+            <th style="padding:10px 14px; text-align:left;">DXF File</th>
+            <th style="padding:10px 14px; text-align:left;"></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for rid, info in routes.items %}
+        <tr style="border-bottom:1px solid #eee;">
+            <td style="padding:10px 14px;"><b>{{ rid }}</b></td>
+            <td style="padding:10px 14px; font-size:11px; color:#555;">
+                {{ info.xlsx|default:"—" }}
+            </td>
+            <td style="padding:10px 14px; font-size:11px; color:#555;">
+                {{ info.dxf|default:"—" }}
+            </td>
+            <td style="padding:10px 14px;">
+                <form method="post"
+                      onsubmit="return confirm('Delete ALL files for {{ rid }}? This cannot be undone.')">
+                    {% csrf_token %}
+                    <input type="hidden" name="route_id"  value="{{ rid }}">
+                    <input type="hidden" name="confirmed" value="yes">
+                    <button type="submit"
+                            style="background:#e74c3c; color:white; border:none;
+                                   border-radius:4px; padding:5px 14px; cursor:pointer;
+                                   font-size:12px; font-weight:600;">
+                        🗑 Delete
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color:#999;">No routes found in the data folder.</p>
+{% endif %}
+
+<div style="padding:12px 16px; background:#fff3cd; border:1px solid #f39c12;
+            border-radius:6px; font-size:12px; color:#000; margin-bottom:16px;">
+    <b>⚠ Note:</b> Deleting route files only removes the Excel and DXF from <code>/data/</code>.
+    Photos in <code>/media/photos/</code> are <b>not</b> deleted.
+    Use <a href="/admin/survey/mapgenerationlog/delete-photos/">Delete Photos</a>
+    to remove photos separately. Cached aerial map images in
+    <code>/media/map_cache/</code> are also not removed automatically.
+</div>
+
+<a href="/admin/survey/mapgenerationlog/" class="button" style="background:#6c757d;">
+    ← Back
+</a>
+
+{% endblock %}

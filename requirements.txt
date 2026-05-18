@@ -1,0 +1,11 @@
+Django>=5.0
+pandas>=2.0
+openpyxl>=3.1
+ezdxf>=1.0
+pyproj>=3.6
+folium>=0.15
+plotly>=5.18
+staticmap>=0.5.4
+Pillow>=10.0
+gunicorn>=21.2
+whitenoise>=6.6

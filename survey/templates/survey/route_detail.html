@@ -1,0 +1,601 @@
+{% extends "survey/base.html" %}
+{% load survey_tags %}
+{% block title %}{{ route_id }} — Map & Table{% endblock %}
+{% block nav_detail %}active{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+    /* ── Page layout ────────────────────────────────────────── */
+    .detail-layout {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 56px);
+        overflow: hidden;
+    }
+
+    /* ── Top: map + inspect panel ───────────────────────────── */
+    .map-section {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        height: 55vh;
+        min-height: 380px;
+        border-bottom: 1px solid #2e2e2e;
+    }
+
+    #route-map {
+        width: 100%;
+        height: 100%;
+    }
+
+    /* ── Inspect panel ──────────────────────────────────────── */
+    .inspect-panel {
+        background: #141414;
+        border-left: 1px solid #2e2e2e;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .inspect-header {
+        background: #1a1a1a;
+        border-bottom: 1px solid #2e2e2e;
+        padding: 10px 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .inspect-header .title {
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #666;
+    }
+    .inspect-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px;
+    }
+
+    /* Empty state */
+    .inspect-empty {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #444;
+        font-size: 0.82rem;
+        text-align: center;
+        gap: 10px;
+    }
+    .inspect-empty i { font-size: 2rem; }
+
+    /* Populated state */
+    .inspect-id {
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #f0f0f0;
+        line-height: 1;
+        margin-bottom: 2px;
+    }
+    .inspect-type {
+        font-size: 0.8rem;
+        color: #888;
+        margin-bottom: 12px;
+    }
+    .inspect-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        margin-bottom: 12px;
+    }
+    .inspect-table td {
+        padding: 4px 0;
+        vertical-align: top;
+        border-bottom: 1px solid #222;
+    }
+    .inspect-table .key { color: #666; width: 45%; padding-right: 8px; }
+    .inspect-table .val { color: #ddd; font-weight: 500; }
+
+    .cond-good  { color: var(--good) !important; font-weight: 700 !important; }
+    .cond-fair  { color: var(--fair) !important; font-weight: 700 !important; }
+    .cond-poor  { color: var(--poor) !important; font-weight: 700 !important; }
+
+    .inspect-notes {
+        background: #111;
+        border-left: 3px solid var(--tgp-red);
+        border-radius: 4px;
+        padding: 8px 10px;
+        font-size: 0.78rem;
+        color: #bbb;
+        margin-bottom: 12px;
+    }
+    .inspect-notes .lbl {
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #555;
+        margin-bottom: 4px;
+    }
+
+    .inspect-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .btn-inspect {
+        display: block;
+        text-align: center;
+        padding: 7px 10px;
+        border-radius: 5px;
+        font-family: 'Roboto Condensed', sans-serif;
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        text-decoration: none !important;
+        transition: background 0.2s;
+    }
+    .btn-inspect-maps   { background: #4285F4; color: white !important; }
+    .btn-inspect-maps:hover { background: #2b6ed4; }
+    .btn-inspect-report { background: #1a1a1a; color: #aaa !important; border: 1px solid #333; }
+    .btn-inspect-report:hover { background: #2a2a2a; color: white !important; }
+
+    /* ── Bottom: tables ─────────────────────────────────────── */
+    .tables-section {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        background: #0f0f0f;
+    }
+
+    .section-title {
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #555;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #2e2e2e;
+    }
+
+    /* Stats strip */
+    .stats-strip {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+    .strip-stat {
+        background: #1a1a1a;
+        border: 1px solid #2e2e2e;
+        border-radius: 5px;
+        padding: 6px 14px;
+        font-size: 0.78rem;
+        color: #aaa;
+    }
+    .strip-stat b { color: #f0f0f0; }
+
+    /* Tables */
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.78rem;
+        margin-bottom: 24px;
+    }
+    .data-table thead th {
+        background: #1a1a1a;
+        color: #666;
+        font-family: 'Roboto Condensed', sans-serif;
+        text-transform: uppercase;
+        font-size: 0.68rem;
+        letter-spacing: 0.5px;
+        padding: 8px 10px;
+        border-bottom: 1px solid #2e2e2e;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+    }
+    .data-table tbody td {
+        padding: 7px 10px;
+        border-bottom: 1px solid #1e1e1e;
+        color: #ccc;
+        vertical-align: middle;
+    }
+    .data-table tbody tr { cursor: pointer; transition: background 0.15s; }
+    .data-table tbody tr:hover { background: #1e1e1e; }
+    .data-table tbody tr.highlighted { background: #1a2540 !important; }
+
+    .cond-badge {
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: white;
+    }
+    .cond-badge-good { background: var(--good); }
+    .cond-badge-fair { background: var(--fair); }
+    .cond-badge-poor { background: var(--poor); }
+    .cond-badge-unknown { background: #555; }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="detail-layout">
+
+    <!-- ── MAP + INSPECT ──────────────────────────────────── -->
+    <div class="map-section">
+
+        <!-- Map -->
+        <div id="route-map"></div>
+
+        <!-- Inspect panel -->
+        <div class="inspect-panel">
+            <div class="inspect-header">
+                <span class="title">
+                    <i class="bi bi-info-circle me-1"></i>Selected Item
+                </span>
+                <span id="inspect-count" style="font-size:0.7rem; color:#555">
+                    {{ n_features }} features · {{ n_pp }} passing places
+                </span>
+            </div>
+            <!-- Search box -->
+            <div style="padding:8px 14px; border-bottom:1px solid #2e2e2e; background:#111;">
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <div style="position:relative; flex:1;">
+                        <i class="bi bi-search"
+                           style="position:absolute; left:8px; top:50%; transform:translateY(-50%);
+                                  color:#555; font-size:0.75rem; pointer-events:none;"></i>
+                        <input type="text"
+                               id="table-search"
+                               placeholder="Search ID, type, condition…"
+                               oninput="filterTables(this.value)"
+                               style="width:100%; background:#1a1a1a; border:1px solid #2e2e2e;
+                                      border-radius:5px; color:#f0f0f0; padding:6px 8px 6px 26px;
+                                      font-size:0.78rem; outline:none;">
+                    </div>
+                    <button onclick="clearSearch()"
+                            style="background:#2a2a2a; border:1px solid #333; border-radius:5px;
+                                   color:#888; padding:6px 10px; cursor:pointer; font-size:0.75rem;
+                                   white-space:nowrap;">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div id="search-count"
+                     style="font-size:0.7rem; color:#555; margin-top:4px; min-height:14px;"></div>
+            </div>
+
+            <div class="inspect-body" id="inspect-body">
+                <div class="inspect-empty">
+                    <i class="bi bi-cursor"></i>
+                    <span>Click any marker on<br>the map to inspect</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ── TABLES ─────────────────────────────────────────── -->
+    <div class="tables-section">
+
+        <!-- Stats strip -->
+        <div class="stats-strip">
+            <div class="strip-stat">Features <b>{{ n_features }}</b></div>
+            <div class="strip-stat">Passing Places <b>{{ n_pp }}</b></div>
+            <div class="strip-stat" style="border-color:var(--good)">
+                Good <b style="color:var(--good)">{{ n_good }}</b>
+            </div>
+            <div class="strip-stat" style="border-color:var(--fair)">
+                Fair <b style="color:var(--fair)">{{ n_fair }}</b>
+            </div>
+            <div class="strip-stat" style="border-color:var(--poor)">
+                Poor <b style="color:var(--poor)">{{ n_poor }}</b>
+            </div>
+        </div>
+
+        <!-- Features table -->
+        <div class="section-title">Features</div>
+        <table class="data-table" id="features-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Condition</th>
+                    <th>Side</th>
+                    <th>Chainage (m)</th>
+                    <th>Offset (m)</th>
+                    <th>Easting</th>
+                    <th>Northing</th>
+                    <th>GPS ±</th>
+                    <th>Notes</th>
+                    <th>Captured By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in features %}
+                <tr onclick="selectFromTable('{{ f.ID }}', 'feature')"
+                    id="row-feature-{{ f.ID }}">
+                    <td><b style="color:#f0f0f0">{{ f.ID }}</b></td>
+                    <td>{{ f|get_item:"Feature Type" }}</td>
+                    <td>
+                        {% with c=f.Condition %}
+                        <span class="cond-badge cond-badge-{{ c|lower }}">{{ c }}</span>
+                        {% endwith %}
+                    </td>
+                    <td>{{ f.Side }}</td>
+                    <td>{{ f|get_item:"Chainage (m)"|floatformat:1 }}</td>
+                    <td>{{ f|get_item:"Offset from Edge (m)"|floatformat:2 }}</td>
+                    <td>{{ f.Easting|floatformat:0 }}</td>
+                    <td>{{ f.Northing|floatformat:0 }}</td>
+                    <td>{{ f|get_item:"GPS Accuracy (m)"|floatformat:1 }}</td>
+                    <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+                        {{ f.Notes }}</td>
+                    <td>{{ f|get_item:"Captured By" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Passing places table -->
+        {% if passing_places %}
+        <div class="section-title" style="margin-top:8px">Passing Places</div>
+        <table class="data-table" id="pp-table">
+            <thead>
+                <tr>
+                    <th>PP ID</th>
+                    <th>Status</th>
+                    <th>Side</th>
+                    <th>Chainage (m)</th>
+                    <th>Width (m)</th>
+                    <th>Length (m)</th>
+                    <th>Easting</th>
+                    <th>Northing</th>
+                    <th>GPS ±</th>
+                    <th>Notes</th>
+                    <th>Captured By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in passing_places %}
+                <tr onclick="selectFromTable('{{ p|get_item:"PP ID" }}', 'pp')"
+                    id="row-pp-{{ p|get_item:"PP ID" }}">
+                    <td><b style="color:#f0f0f0">{{ p|get_item:"PP ID" }}</b></td>
+                    <td>{{ p.Status }}</td>
+                    <td>{{ p.Side }}</td>
+                    <td>{{ p|get_item:"Mid Chainage (m)"|floatformat:1 }}</td>
+                    <td>{{ p|get_item:"Width (m)"|floatformat:1 }}</td>
+                    <td>{{ p|get_item:"Length (m)"|floatformat:1 }}</td>
+                    <td>{{ p|get_item:"Mid Easting"|floatformat:0 }}</td>
+                    <td>{{ p|get_item:"Mid Northing"|floatformat:0 }}</td>
+                    <td>{{ p|get_item:"GPS Accuracy (m)"|floatformat:1 }}</td>
+                    <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+                        {{ p.Notes }}</td>
+                    <td>{{ p|get_item:"Captured By" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Data from Django ────────────────────────────────────────
+var FEATURES     = {{ features_json|safe }};
+var PP           = {{ pp_json|safe }};
+var ROUTE_COORDS = {{ route_coords|safe }};
+var ROUTE_ID     = "{{ route_id }}";
+
+// ── Feature type colours (match data_loader.py) ─────────────
+var FEATURE_COLORS = {
+    "Gullies":              "#3498db",
+    "Lighting columns":     "#f39c12",
+    "Culverts / headwalls": "#2ecc71",
+    "Sign posts":           "#e74c3c",
+    "Gates":                "#9b59b6",
+    "Fencing":              "#1abc9c",
+    "Width":                "#95a5a6",
+    "Custom / Other":       "#e67e22",
+};
+var COND_COLORS = { "GOOD": "#27ae60", "FAIR": "#f39c12", "POOR": "#e74c3c" };
+var DEFAULT_COLOR = "#607d8b";
+
+function featureColor(type) { return FEATURE_COLORS[type] || DEFAULT_COLOR; }
+function condColor(c)       { return COND_COLORS[c] || DEFAULT_COLOR; }
+
+// ── Initialise map ──────────────────────────────────────────
+var map = L.map('route-map');
+L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles &copy; Esri', maxZoom: 19 }
+).addTo(map);
+
+// Route alignment
+if (ROUTE_COORDS.length > 1) {
+    L.polyline(ROUTE_COORDS, { color: '#ffffff', weight: 3, opacity: 0.8 })
+     .addTo(map)
+     .bindTooltip(ROUTE_ID + ' alignment');
+}
+
+// Fit map to route
+if (ROUTE_COORDS.length > 0) {
+    map.fitBounds(ROUTE_COORDS, { padding: [30, 30] });
+}
+
+// ── Marker registry (id → marker) ───────────────────────────
+var markerRegistry = {};
+var activeMarkerId = null;
+
+// ── Draw feature markers ─────────────────────────────────────
+FEATURES.forEach(function(f) {
+    var col = featureColor(f.type);
+    var marker = L.circleMarker([f.lat, f.lon], {
+        radius: 7, color: col, fillColor: col,
+        fillOpacity: 0.88, weight: 1.5
+    }).addTo(map);
+
+    marker.on('click', function() { selectItem(f.id, 'feature'); });
+    marker.bindTooltip(f.id + ' · ' + f.type + ' · ' + f.condition);
+    markerRegistry['feature-' + f.id] = marker;
+});
+
+// ── Draw passing place markers ───────────────────────────────
+PP.forEach(function(p) {
+    var marker = L.circleMarker([p.lat, p.lon], {
+        radius: 8, color: '#2ecc71', fillColor: '#2ecc71',
+        fillOpacity: 0.88, weight: 1.5
+    }).addTo(map);
+
+    marker.on('click', function() { selectItem(p.id, 'pp'); });
+    marker.bindTooltip(p.id + ' · Passing Place · ' + p.condition);
+    markerRegistry['pp-' + p.id] = marker;
+});
+
+// ── Highlight a marker ───────────────────────────────────────
+function highlightMarker(id, kind) {
+    // Reset previous
+    if (activeMarkerId) {
+        var prev = markerRegistry[activeMarkerId];
+        if (prev) {
+            var prevData = activeMarkerId.startsWith('pp-')
+                ? PP.find(function(x) { return x.id === activeMarkerId.replace('pp-',''); })
+                : FEATURES.find(function(x) { return x.id === activeMarkerId.replace('feature-',''); });
+            if (prevData) {
+                var prevCol = prevData.kind === 'pp' ? '#2ecc71' : featureColor(prevData.type);
+                prev.setStyle({ color: prevCol, fillColor: prevCol, radius: 7, weight: 1.5 });
+            }
+        }
+        // Remove table highlight
+        document.querySelectorAll('.highlighted').forEach(function(r) { r.classList.remove('highlighted'); });
+    }
+
+    var key = kind + '-' + id;
+    var marker = markerRegistry[key];
+    if (marker) {
+        marker.setStyle({ color: '#ffffff', fillColor: '#ffff00', radius: 11, weight: 3 });
+        activeMarkerId = key;
+    }
+
+    // Highlight table row
+    var row = document.getElementById('row-' + key);
+    if (row) {
+        row.classList.add('highlighted');
+        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+// ── Populate inspect panel ───────────────────────────────────
+function selectItem(id, kind) {
+    var data = kind === 'pp'
+        ? PP.find(function(x) { return x.id === id; })
+        : FEATURES.find(function(x) { return x.id === id; });
+
+    if (!data) return;
+    highlightMarker(id, kind);
+
+    var condClass = 'cond-' + (data.condition || '').toLowerCase();
+    var mapsUrl   = 'https://www.google.com/maps?q=' + data.lat + ',' + data.lon;
+    var reportUrl = '/route/' + ROUTE_ID + '/report/';
+
+    var specs = '';
+    if (kind === 'feature') {
+        specs += row('Condition', '<span class="' + condClass + '">' + data.condition + '</span>');
+        specs += row('Side', data.side);
+        specs += row('Chainage', (data.chainage !== '' ? parseFloat(data.chainage).toFixed(1) + ' m' : '—'));
+        specs += row('Offset', (data.offset !== '' ? parseFloat(data.offset).toFixed(2) + ' m' : '—'));
+        specs += row('Easting', data.easting ? parseFloat(data.easting).toLocaleString() : '—');
+        specs += row('Northing', data.northing ? parseFloat(data.northing).toLocaleString() : '—');
+        specs += row('GPS ±', data.gps_acc ? '± ' + parseFloat(data.gps_acc).toFixed(1) + ' m' : '—');
+        specs += row('Captured By', data.captured_by || '—');
+        specs += row('Captured At', data.captured_at || '—');
+    } else {
+        specs += row('Status', data.condition || '—');
+        specs += row('Side', data.side);
+        specs += row('Chainage', (data.chainage !== '' ? parseFloat(data.chainage).toFixed(1) + ' m' : '—'));
+        specs += row('Width', data.width ? parseFloat(data.width).toFixed(1) + ' m' : '—');
+        specs += row('Length', data.length ? parseFloat(data.length).toFixed(1) + ' m' : '—');
+        specs += row('Easting', data.easting ? parseFloat(data.easting).toLocaleString() : '—');
+        specs += row('Northing', data.northing ? parseFloat(data.northing).toLocaleString() : '—');
+        specs += row('GPS ±', data.gps_acc ? '± ' + parseFloat(data.gps_acc).toFixed(1) + ' m' : '—');
+        specs += row('Captured By', data.captured_by || '—');
+        specs += row('Captured At', data.captured_at || '—');
+    }
+
+    var notesHtml = '';
+    if (data.notes && data.notes.trim() && data.notes !== 'nan') {
+        notesHtml = '<div class="inspect-notes"><div class="lbl">Notes</div>' + data.notes + '</div>';
+    }
+
+    document.getElementById('inspect-body').innerHTML =
+        '<div class="inspect-id">' + data.id + '</div>'
+        + '<div class="inspect-type">' + data.type + '</div>'
+        + '<table class="inspect-table">' + specs + '</table>'
+        + notesHtml
+        + '<div class="inspect-actions">'
+        + '<a href="' + mapsUrl + '" target="_blank" class="btn-inspect btn-inspect-maps">'
+        + '<i class="bi bi-geo-alt-fill me-1"></i>Open in Google Maps</a>'
+        + '<a href="' + reportUrl + '" class="btn-inspect btn-inspect-report">'
+        + '<i class="bi bi-file-text me-1"></i>View Full Report</a>'
+        + '</div>';
+}
+
+function row(key, val) {
+    return '<tr><td class="key">' + key + '</td><td class="val">' + (val || '—') + '</td></tr>';
+}
+
+// ── Select from table row click ──────────────────────────────
+function selectFromTable(id, kind) {
+    selectItem(id, kind);
+    // Pan map to marker
+    var key    = kind + '-' + id;
+    var marker = markerRegistry[key];
+    if (marker) {
+        map.panTo(marker.getLatLng(), { animate: true, duration: 0.5 });
+    }
+}
+
+// ── Table search ─────────────────────────────────────────────
+function filterTables(query) {
+    query = (query || '').toLowerCase().trim();
+    var shown = 0;
+    var total = 0;
+
+    ['features-table', 'pp-table'].forEach(function(tableId) {
+        var table = document.getElementById(tableId);
+        if (!table) return;
+        table.querySelectorAll('tbody tr').forEach(function(row) {
+            total++;
+            if (!query || row.innerText.toLowerCase().indexOf(query) !== -1) {
+                row.style.display = '';
+                shown++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    });
+
+    var el = document.getElementById('search-count');
+    if (el) {
+        el.textContent = query ? (shown + ' of ' + total + ' rows match') : '';
+        el.style.color = (shown === 0 && query) ? '#e74c3c' : '#666';
+    }
+}
+
+function clearSearch() {
+    var input = document.getElementById('table-search');
+    if (input) { input.value = ''; }
+    filterTables('');
+    if (input) { input.focus(); }
+}
+</script>
+{% endblock %}

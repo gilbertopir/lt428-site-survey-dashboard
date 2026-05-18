@@ -1,0 +1,59 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+
+<h2>Generate Aerial Maps</h2>
+<p style="color:#666">
+    Generate static satellite images for each survey stop.
+    Images are cached — only regenerate if data or coordinates have changed.
+</p>
+
+<table class="table" id="result_list" style="width:100%">
+    <thead>
+        <tr>
+            <th>Route ID</th>
+            <th>Label</th>
+            <th>Last Generated</th>
+            <th>Stops</th>
+            <th>Result</th>
+            <th>Duration</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for rs in route_status %}
+        <tr>
+            <td><strong>{{ rs.route_id }}</strong></td>
+            <td>{{ rs.info.label }}</td>
+            {% if rs.log %}
+                <td>{{ rs.log.generated_at|date:"d M Y H:i" }}</td>
+                <td>{{ rs.log.total_stops }}</td>
+                <td>
+                    {% if rs.log.status == "ok" %}
+                        <span style="color:#27ae60; font-weight:600">✅ {{ rs.log.success_count }} ok</span>
+                    {% elif rs.log.status == "partial" %}
+                        <span style="color:#f39c12; font-weight:600">
+                            ⚠ {{ rs.log.success_count }} ok / {{ rs.log.fail_count }} failed
+                        </span>
+                    {% else %}
+                        <span style="color:#e74c3c; font-weight:600">✗ Failed</span>
+                    {% endif %}
+                </td>
+                <td>{{ rs.log.duration_secs|floatformat:0 }}s</td>
+                <td>
+                    <a class="button" href="/admin/survey/mapgenerationlog/generate/{{ rs.route_id }}/">Regenerate</a>
+                </td>
+            {% else %}
+                <td style="color:#999">Never</td>
+                <td>—</td>
+                <td style="color:#999">Not generated</td>
+                <td>—</td>
+                <td>
+                    <a class="button default" href="/admin/survey/mapgenerationlog/generate/{{ rs.route_id }}/">Generate Now</a>
+                </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}
