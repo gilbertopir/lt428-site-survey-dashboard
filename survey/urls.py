@@ -18,4 +18,7 @@ urlpatterns = [
 
     # Summary charts
     path('route/<str:route_id>/summary/', views.route_summary, name='route_summary'),
+
+    # Photo library and downloads
+    path('downloads/', views.photo_library, name='photo_library'),
 ]

@@ -1,0 +1,323 @@
+{% extends "survey/base.html" %}
+{% load survey_tags %}
+{% block title %}Downloads — {{ route_id }}{% endblock %}
+{% block nav_downloads %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    .lib-wrapper { padding: 1.5rem; }
+
+    /* ── Top bar ────────────────────────────────────────────── */
+    .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    /* ── Search + actions row ───────────────────────────────── */
+    .controls-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+        background: #1a1a1a;
+        border: 1px solid #2e2e2e;
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+    .search-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 220px;
+    }
+    .search-wrap i {
+        position: absolute;
+        left: 9px; top: 50%;
+        transform: translateY(-50%);
+        color: #555; font-size: 0.78rem;
+        pointer-events: none;
+    }
+    .search-input {
+        width: 100%;
+        background: #111;
+        border: 1px solid #2e2e2e;
+        border-radius: 5px;
+        color: #f0f0f0;
+        padding: 7px 8px 7px 28px;
+        font-size: 0.82rem;
+        outline: none;
+    }
+    .search-input:focus { border-color: var(--tgp-navy); }
+    .search-count { font-size: 0.75rem; color: #555; white-space: nowrap; }
+
+    .btn-action {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 16px; border-radius: 5px;
+        font-family: 'Roboto Condensed', sans-serif;
+        font-weight: 700; font-size: 0.75rem;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        cursor: pointer; text-decoration: none !important;
+        border: none; transition: background 0.2s; white-space: nowrap;
+    }
+    .btn-excel { background: #1d6f42; color: white !important; }
+    .btn-excel:hover { background: #155232; }
+    .btn-zip   { background: var(--tgp-navy); color: white !important; }
+    .btn-zip:hover { background: var(--tgp-red); }
+    .btn-zip:disabled { background: #333 !important; color: #666 !important; cursor: not-allowed; }
+    .btn-sel   { background: #2a2a2a; color: #aaa !important; border: 1px solid #333; }
+    .btn-sel:hover { background: #333; color: white !important; }
+
+    /* ── Photo grid ─────────────────────────────────────────── */
+    .photo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 12px;
+    }
+
+    .photo-card {
+        background: #1a1a1a;
+        border: 2px solid #2e2e2e;
+        border-radius: 7px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: border-color 0.15s;
+        position: relative;
+    }
+    .photo-card:hover    { border-color: #555; }
+    .photo-card.selected { border-color: var(--tgp-red); }
+    .photo-card.hidden   { display: none; }
+    .photo-card.no-photo { opacity: 0.35; cursor: default; }
+
+    .photo-card input[type=checkbox] {
+        position: absolute; top: 7px; left: 7px;
+        width: 16px; height: 16px;
+        cursor: pointer; z-index: 2;
+        accent-color: var(--tgp-red);
+    }
+
+    .photo-thumb {
+        width: 100%; height: 130px;
+        object-fit: cover; display: block;
+    }
+    .photo-no-thumb {
+        width: 100%; height: 130px;
+        background: #111;
+        display: flex; align-items: center;
+        justify-content: center;
+        color: #2a2a2a; font-size: 2.5rem;
+    }
+
+    .photo-meta {
+        padding: 8px 10px;
+        font-size: 0.72rem;
+    }
+    .meta-id   { font-weight: 700; color: #f0f0f0; font-size: 0.85rem; line-height: 1; }
+    .meta-type { color: #888; margin-top: 3px; }
+    .meta-ch   { color: #555; font-size: 0.68rem; margin-top: 2px; }
+    .meta-cond { font-size: 0.68rem; font-weight: 700; margin-top: 3px; }
+
+    .cond-good { color: var(--good); }
+    .cond-fair { color: var(--fair); }
+    .cond-poor { color: var(--poor); }
+
+    /* Stats */
+    .stats-strip {
+        display: flex; gap: 10px;
+        margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .strip-stat {
+        background: #1a1a1a; border: 1px solid #2e2e2e;
+        border-radius: 5px; padding: 5px 14px;
+        font-size: 0.78rem; color: #aaa;
+    }
+    .strip-stat b { color: #f0f0f0; }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="lib-wrapper">
+
+    <!-- Top bar -->
+    <div class="top-bar">
+        <div>
+            <h1 style="font-size:1.3rem; margin:0;">
+                📥 Downloads &amp; Photo Library
+            </h1>
+            <p style="color:#666; font-size:0.8rem; margin:3px 0 0;">
+                {{ route_id }} — {{ info.label }}
+            </p>
+        </div>
+
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-strip">
+        <div class="strip-stat">Photos <b>{{ total }}</b></div>
+        <div class="strip-stat">Features <b>{{ with_photos }}</b></div>
+    </div>
+
+    <!-- Controls: search + download buttons -->
+    <form method="post" id="dl-form">
+        {% csrf_token %}
+        <input type="hidden" name="route"  value="{{ route_id }}">
+        <input type="hidden" name="action" value="download_photos">
+
+        <div class="controls-row">
+            <!-- Search -->
+            <div class="search-wrap">
+                <i class="bi bi-search"></i>
+                <input type="text"
+                       id="photo-search"
+                       class="search-input"
+                       placeholder="Search ID, type, condition, chainage…"
+                       oninput="filterPhotos(this.value)">
+            </div>
+            <span class="search-count" id="search-count"></span>
+
+            <div style="width:1px; height:24px; background:#2e2e2e;"></div>
+
+            <!-- Select helpers -->
+            <button type="button" onclick="selectAll()"  class="btn-action btn-sel">
+                <i class="bi bi-check-all"></i> All
+            </button>
+            <button type="button" onclick="clearAll()"   class="btn-action btn-sel">
+                <i class="bi bi-x"></i> Clear
+            </button>
+
+            <div style="width:1px; height:24px; background:#2e2e2e;"></div>
+
+            <!-- Downloads -->
+            <button type="submit" id="dl-btn"
+                    class="btn-action btn-zip" disabled>
+                <i class="bi bi-file-zip"></i>
+                Download Selected (<span id="dl-count">0</span>)
+            </button>
+
+            <a href="?route={{ route_id }}&action=download_excel"
+               class="btn-action btn-excel">
+                <i class="bi bi-file-earmark-spreadsheet"></i>
+                Download Excel
+            </a>
+        </div>
+
+        <!-- Photo grid -->
+        <div class="photo-grid" id="photo-grid">
+            {% for item in items %}
+            <div class="photo-card {% if not item.has_photo %}no-photo{% endif %}"
+                 id="card-{{ forloop.counter }}"
+                 data-search="{{ item.id }} {{ item.type }} {{ item.condition }} {{ item.chainage|floatformat:0 }} {{ item.side }}"
+                 onclick="{% if item.has_photo %}toggleCard({{ forloop.counter }}, '{{ item.photo }}'){% endif %}">
+
+                {% if item.has_photo %}
+                <input type="checkbox"
+                       name="selected_photos"
+                       value="{{ item.photo }}"
+                       id="chk-{{ forloop.counter }}"
+                       onclick="event.stopPropagation()"
+                       onchange="updateCount()">
+                {% endif %}
+
+                {% if item.photo_url %}
+                <a href="{{ item.photo_url }}" target="_blank"
+                   onclick="event.stopPropagation()">
+                    <img src="{{ item.photo_url }}"
+                         class="photo-thumb"
+                         alt="{{ item.id }}">
+                </a>
+                {% else %}
+                <div class="photo-no-thumb">
+                    <i class="bi bi-camera"></i>
+                </div>
+                {% endif %}
+
+                <div class="photo-meta">
+                    <div class="meta-id">{{ item.id }}</div>
+                    <div class="meta-type">{{ item.type }}</div>
+                    <div class="meta-cond cond-{{ item.condition|lower }}">
+                        {{ item.condition }}
+                    </div>
+                    <div class="meta-ch">
+                        {% if item.chainage %}
+                        <span style="color:#aaa; font-weight:600;">
+                            {{ item.chainage|floatformat:0 }} m
+                        </span>
+                        {% endif %}
+                        {% if item.side %} · {{ item.side }}{% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+    </form>
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+// ── Search ────────────────────────────────────────────────────
+function filterPhotos(query) {
+    query = (query || '').toLowerCase().trim();
+    var cards = document.querySelectorAll('.photo-card');
+    var shown = 0;
+    cards.forEach(function(card) {
+        var text = (card.dataset.search || '').toLowerCase();
+        if (!query || text.indexOf(query) !== -1) {
+            card.classList.remove('hidden');
+            shown++;
+        } else {
+            card.classList.add('hidden');
+            // Uncheck hidden cards
+            var chk = card.querySelector('input[type=checkbox]');
+            if (chk) { chk.checked = false; card.classList.remove('selected'); }
+        }
+    });
+    var el = document.getElementById('search-count');
+    if (el) {
+        el.textContent = query ? (shown + ' of {{ total }} items') : '';
+        el.style.color  = (shown === 0 && query) ? '#e74c3c' : '#555';
+    }
+    updateCount();
+}
+
+// ── Selection ─────────────────────────────────────────────────
+function toggleCard(n, photoName) {
+    var card = document.getElementById('card-' + n);
+    var chk  = document.getElementById('chk-' + n);
+    if (!chk || card.classList.contains('hidden')) return;
+    chk.checked = !chk.checked;
+    card.classList.toggle('selected', chk.checked);
+    updateCount();
+}
+
+function selectAll() {
+    document.querySelectorAll('.photo-card:not(.no-photo):not(.hidden)').forEach(function(card) {
+        var chk = card.querySelector('input[type=checkbox]');
+        if (chk) { chk.checked = true; card.classList.add('selected'); }
+    });
+    updateCount();
+}
+
+function clearAll() {
+    document.querySelectorAll('.photo-card').forEach(function(card) {
+        var chk = card.querySelector('input[type=checkbox]');
+        if (chk) { chk.checked = false; card.classList.remove('selected'); }
+    });
+    updateCount();
+}
+
+function updateCount() {
+    var n   = document.querySelectorAll('input[name=selected_photos]:checked').length;
+    var btn = document.getElementById('dl-btn');
+    var cnt = document.getElementById('dl-count');
+    if (btn) btn.disabled = (n === 0);
+    if (cnt) cnt.textContent = n;
+}
+</script>
+{% endblock %}

@@ -239,6 +239,12 @@
                 </li>
                 {% endif %}
                 {% endwith %}
+                <li class="nav-item">
+                    <a class="nav-link {% block nav_downloads %}{% endblock %}"
+                       href="{% url 'survey:photo_library' %}">
+                        <i class="bi bi-download me-1"></i>Downloads
+                    </a>
+                </li>
             </ul>
 
             {% if routes and route_id %}
@@ -253,6 +259,11 @@
                     {% block nav_route_option %}
                     {% if 'report' in request.path %}
                         <option value="{% url 'survey:route_report' rid %}"
+                                {% if rid == route_id %}selected{% endif %}>
+                            {{ rid }} — {{ rinfo.label|truncatechars:28 }}
+                        </option>
+                    {% elif 'downloads' in request.path %}
+                        <option value="/downloads/?route={{ rid }}"
                                 {% if rid == route_id %}selected{% endif %}>
                             {{ rid }} — {{ rinfo.label|truncatechars:28 }}
                         </option>

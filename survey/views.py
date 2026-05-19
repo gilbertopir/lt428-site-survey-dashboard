@@ -242,3 +242,199 @@ def route_summary(request, route_id):
         'n_pp':       len(df_pp),
     }
     return render(request, 'survey/summary.html', context)
+
+def photo_library(request):
+    import json
+    import io
+    import zipfile
+    from django.http import HttpResponse
+    from .services.data_loader import feature_color
+
+    routes = scan_routes()
+    if not routes:
+        return render(request, 'survey/photo_library.html', {'routes': routes})
+
+    # Route selection
+    route_id = request.GET.get('route') or request.POST.get('route') or list(routes.keys())[0]
+    if route_id not in routes:
+        route_id = list(routes.keys())[0]
+
+    info = routes[route_id]
+    df_features, df_pp, summary = load_route_data(info['xlsx'])
+
+    # ── Filters ───────────────────────────────────────────────
+    q_id      = request.GET.get('q_id', '').strip().lower()
+    q_type    = request.GET.get('q_type', '')
+    ch_min    = request.GET.get('ch_min', '')
+    ch_max    = request.GET.get('ch_max', '')
+    photos_only = request.GET.get('photos_only', '') == '1'
+
+    def apply_filters(df, id_col, chainage_col, type_col=None):
+        if q_id:
+            df = df[df[id_col].astype(str).str.lower().str.contains(q_id)]
+        if q_type and type_col:
+            df = df[df[type_col] == q_type]
+        if ch_min:
+            try: df = df[df[chainage_col] >= float(ch_min)]
+            except: pass
+        if ch_max:
+            try: df = df[df[chainage_col] <= float(ch_max)]
+            except: pass
+        return df
+
+    df_f  = apply_filters(df_features.copy(), 'ID', 'Chainage (m)', 'Feature Type')
+    df_pp = apply_filters(df_pp.copy(), 'PP ID', 'Mid Chainage (m)')
+
+    # ── Build photo items ─────────────────────────────────────
+    import math
+    def safe_str(val):
+        if val is None: return ''
+        try:
+            if math.isnan(float(val)): return ''
+        except: pass
+        return str(val).strip()
+
+    def make_new_name(route_id, item_id, feature_type, condition, chainage, original):
+        ext = original.rsplit('.', 1)[-1] if '.' in original else 'jpg'
+        ch  = f"CH{float(chainage):.0f}m" if chainage else ''
+        parts = [p for p in [route_id, item_id, feature_type, condition, ch] if p]
+        return '_'.join(parts).replace(' ', '_').replace('/', '_') + '.' + ext
+
+    items = []
+    for _, row in df_f.iterrows():
+        photos = [p.strip() for p in str(row.get('Photo', '') or '').split(',') if p.strip()]
+        if photos_only and not photos:
+            continue
+        for i, photo in enumerate(photos):
+            from pathlib import Path
+            from django.conf import settings
+            path = settings.MEDIA_ROOT / 'photos' / 'features' / photo
+            new_name = make_new_name(
+                route_id, safe_str(row['ID']),
+                safe_str(row.get('Feature Type', '')),
+                safe_str(row.get('Condition', '')),
+                row.get('Chainage (m)', ''), photo
+            )
+            items.append({
+                'id':           safe_str(row['ID']),
+                'kind':         'feature',
+                'type':         safe_str(row.get('Feature Type', '')),
+                'condition':    safe_str(row.get('Condition', '')),
+                'chainage':     row.get('Chainage (m)', ''),
+                'side':         safe_str(row.get('Side', '')),
+                'photo':        photo,
+                'new_name':     new_name,
+                'has_photo':    path.exists(),
+                'photo_url':    f'/media/photos/features/{photo}' if path.exists() else None,
+                'captured_at':  safe_str(row.get('Captured At', ''))[:10],
+            })
+
+
+    for _, row in df_pp.iterrows():
+        photos = [p.strip() for p in str(row.get('Photo', '') or '').split(',') if p.strip()]
+        if photos_only and not photos:
+            continue
+        for i, photo in enumerate(photos):
+            from pathlib import Path
+            from django.conf import settings
+            path = settings.MEDIA_ROOT / 'photos' / 'passing_places' / photo
+            new_name = make_new_name(
+                route_id, safe_str(row['PP ID']),
+                'PassingPlace',
+                safe_str(row.get('Status', '')),
+                row.get('Mid Chainage (m)', ''), photo
+            )
+            items.append({
+                'id':           safe_str(row['PP ID']),
+                'kind':         'pp',
+                'type':         'Passing Place',
+                'condition':    safe_str(row.get('Status', '')),
+                'chainage':     row.get('Mid Chainage (m)', ''),
+                'side':         safe_str(row.get('Side', '')),
+                'photo':        photo,
+                'new_name':     new_name,
+                'has_photo':    path.exists(),
+                'photo_url':    f'/media/photos/passing_places/{photo}' if path.exists() else None,
+                'captured_at':  safe_str(row.get('Captured At', ''))[:10],
+            })
+
+
+    # Keep only items with photos and sort by chainage
+    items = [i for i in items if i['has_photo']]
+    items.sort(key=lambda x: float(x['chainage']) if x['chainage'] else 0)
+
+    # ── Download zip of selected photos ──────────────────────
+    if request.method == 'POST' and request.POST.get('action') == 'download_photos':
+        selected = request.POST.getlist('selected_photos')
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for item in items:
+                if item['photo'] in selected and item['has_photo']:
+                    subfolder = 'passing_places' if item['kind'] == 'pp' else 'features'
+                    src = settings.MEDIA_ROOT / 'photos' / subfolder / item['photo']
+                    zf.write(src, item['new_name'])
+        buf.seek(0)
+        resp = HttpResponse(buf, content_type='application/zip')
+        resp['Content-Disposition'] = f'attachment; filename="{route_id}_photos.zip"'
+        return resp
+
+    # ── Download Excel ────────────────────────────────────────
+    if request.GET.get('action') == 'download_excel':
+        import openpyxl
+        from openpyxl.styles import PatternFill, Font
+        wb = openpyxl.Workbook()
+
+        # Features sheet — drop Photo column
+        df_features_dl = df_features.drop(columns=['Photo'], errors='ignore')
+        df_pp_dl       = df_pp.drop(columns=['Photo'], errors='ignore')
+
+        ws1 = wb.active
+        ws1.title = 'Features'
+        headers = list(df_features_dl.columns)
+        ws1.append(headers)
+        for cell in ws1[1]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill('solid', fgColor='051b63')
+            cell.font = Font(bold=True, color='FFFFFF')
+        for _, row in df_features_dl.iterrows():
+            ws1.append([str(v) if v is not None else '' for v in row])
+
+        # Passing Places sheet — drop Photo column
+        ws2 = wb.create_sheet('Passing Places')
+        headers2 = list(df_pp_dl.columns)
+        ws2.append(headers2)
+        for cell in ws2[1]:
+            cell.fill = PatternFill('solid', fgColor='051b63')
+            cell.font = Font(bold=True, color='FFFFFF')
+        for _, row in df_pp_dl.iterrows():
+            ws2.append([str(v) if v is not None else '' for v in row])
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        resp = HttpResponse(buf, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f'attachment; filename="{route_id}_survey_data.xlsx"'
+        return resp
+
+    feature_types = sorted(df_features['Feature Type'].dropna().unique())
+    ch_min_val = float(df_features['Chainage (m)'].min())
+    ch_max_val = float(df_features['Chainage (m)'].max())
+
+    context = {
+        'routes':        routes,
+        'first_route':   list(routes.keys())[0] if routes else None,
+        'route_id':      route_id,
+        'info':          info,
+        'items':         items,
+        'feature_types': feature_types,
+        'ch_min_val':    ch_min_val,
+        'ch_max_val':    ch_max_val,
+        'q_id':          q_id,
+        'q_type':        q_type,
+        'ch_min':        ch_min,
+        'ch_max':        ch_max,
+        'photos_only':   photos_only,
+        'total':         len(items),
+        'with_photos':   sum(1 for i in items if i['has_photo']),
+    }
+    return render(request, 'survey/photo_library.html', context)
