@@ -398,17 +398,42 @@ var ROUTE_ID     = "{{ route_id }}";
 
 // ── Feature type colours (match data_loader.py) ─────────────
 var FEATURE_COLORS = {
-    "Gullies":              "#3498db",
-    "Lighting columns":     "#f39c12",
-    "Culverts / headwalls": "#2ecc71",
-    "Sign posts":           "#e74c3c",
-    "Gates":                "#9b59b6",
-    "Fencing":              "#1abc9c",
-    "Width":                "#95a5a6",
-    "Custom / Other":       "#e67e22",
+    "Accesses / driveways":      "#3498db",
+    "Junctions":                 "#2980b9",
+    "Bus stops / laybys":        "#1abc9c",
+    "Gullies":                   "#00bcd4",
+    "Culverts / headwalls":      "#0097a7",
+    "Drainage ditches":          "#26c6da",
+    "Manholes / chambers":       "#4dd0e1",
+    "Ponding / drainage issues": "#006064",
+    "Watercourses":              "#00838f",
+    "Fencing":                   "#f39c12",
+    "Gates":                     "#e67e22",
+    "Bollards":                  "#ff8f00",
+    "Existing walls":            "#ff7043",
+    "Retaining walls":           "#bf360c",
+    "Kerbs / edging":            "#ffb300",
+    "Sign posts":                "#e74c3c",
+    "Sign faces":                "#c0392b",
+    "Traffic signals":           "#ff5252",
+    "Lighting columns":          "#ffd600",
+    "Overhead lines / poles":    "#f9a825",
+    "Hedges":                    "#43a047",
+    "Trees":                     "#2e7d32",
+    "Verge edges":               "#66bb6a",
+    "Cuttings":                  "#a5d6a7",
+    "Embankments":               "#81c784",
+    "Edge break-up":             "#9c27b0",
+    "Pavement defects":          "#7b1fa2",
+    "Road markings":             "#ce93d8",
+    "Cabinets / comms boxes":    "#ff6f00",
+    "Utility covers":            "#ef6c00",
+    "Utility marker posts":      "#e65100",
+    "VRS":                       "#d84315",
+    "Custom / Other":            "#78909c",
 };
 var COND_COLORS = { "GOOD": "#27ae60", "FAIR": "#f39c12", "POOR": "#e74c3c" };
-var DEFAULT_COLOR = "#607d8b";
+var DEFAULT_COLOR = "#ecf0f1";
 
 function featureColor(type) { return FEATURE_COLORS[type] || DEFAULT_COLOR; }
 function condColor(c)       { return COND_COLORS[c] || DEFAULT_COLOR; }
@@ -440,8 +465,8 @@ var activeMarkerId = null;
 FEATURES.forEach(function(f) {
     var col = featureColor(f.type);
     var marker = L.circleMarker([f.lat, f.lon], {
-        radius: 7, color: col, fillColor: col,
-        fillOpacity: 0.88, weight: 1.5
+        radius: 8, color: '#000000', fillColor: col,
+        fillOpacity: 0.95, weight: 1.5
     }).addTo(map);
 
     marker.on('click', function() { selectItem(f.id, 'feature'); });
@@ -449,13 +474,22 @@ FEATURES.forEach(function(f) {
     markerRegistry['feature-' + f.id] = marker;
 });
 
-// ── Draw passing place markers ───────────────────────────────
+// ── Draw passing place markers — green diamond ───────────────
 PP.forEach(function(p) {
-    var marker = L.circleMarker([p.lat, p.lon], {
-        radius: 8, color: '#2ecc71', fillColor: '#2ecc71',
-        fillOpacity: 0.88, weight: 1.5
-    }).addTo(map);
+    var icon = L.divIcon({
+        className: '',
+        html: '<div style="'
+            + 'width:18px;height:18px;background:#2ecc71;'
+            + 'transform:rotate(45deg);'
+            + 'border:2.5px solid #000000;'
+            + 'box-shadow:0 0 5px rgba(0,0,0,0.7);'
+            + '"></div>',
+        iconSize:    [18, 18],
+        iconAnchor:  [9, 9],
+        popupAnchor: [0, -12],
+    });
 
+    var marker = L.marker([p.lat, p.lon], { icon: icon }).addTo(map);
     marker.on('click', function() { selectItem(p.id, 'pp'); });
     marker.bindTooltip(p.id + ' · Passing Place · ' + p.condition);
     markerRegistry['pp-' + p.id] = marker;
@@ -471,8 +505,18 @@ function highlightMarker(id, kind) {
                 ? PP.find(function(x) { return x.id === activeMarkerId.replace('pp-',''); })
                 : FEATURES.find(function(x) { return x.id === activeMarkerId.replace('feature-',''); });
             if (prevData) {
-                var prevCol = prevData.kind === 'pp' ? '#2ecc71' : featureColor(prevData.type);
-                prev.setStyle({ color: prevCol, fillColor: prevCol, radius: 7, weight: 1.5 });
+                if (prevData.kind === 'pp') {
+                    prev.setIcon(L.divIcon({
+                        className: '',
+                        html: '<div style="width:18px;height:18px;background:#2ecc71;'
+                            + 'transform:rotate(45deg);border:2.5px solid #000000;'
+                            + 'box-shadow:0 0 5px rgba(0,0,0,0.7);"></div>',
+                        iconSize: [18,18], iconAnchor: [9,9],
+                    }));
+                } else {
+                    var prevCol = featureColor(prevData.type);
+                    prev.setStyle({ color: '#000000', fillColor: prevCol, radius: 8, weight: 1.5 });
+                }
             }
         }
         // Remove table highlight
@@ -482,7 +526,17 @@ function highlightMarker(id, kind) {
     var key = kind + '-' + id;
     var marker = markerRegistry[key];
     if (marker) {
-        marker.setStyle({ color: '#ffffff', fillColor: '#ffff00', radius: 11, weight: 3 });
+        if (kind === 'pp') {
+            marker.setIcon(L.divIcon({
+                className: '',
+                html: '<div style="width:22px;height:22px;background:#ffff00;'
+                    + 'transform:rotate(45deg);border:3px solid #000000;'
+                    + 'box-shadow:0 0 6px rgba(0,0,0,0.8);"></div>',
+                iconSize: [22,22], iconAnchor: [11,11],
+            }));
+        } else {
+            marker.setStyle({ color: '#000000', fillColor: '#ffff00', radius: 11, weight: 3 });
+        }
         activeMarkerId = key;
     }
 

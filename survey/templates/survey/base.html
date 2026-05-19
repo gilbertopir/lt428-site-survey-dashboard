@@ -237,6 +237,12 @@
                         <i class="bi bi-file-text me-1"></i>Report
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% block nav_summary %}{% endblock %}"
+                       href="{% url 'survey:route_summary' ar %}">
+                        <i class="bi bi-bar-chart me-1"></i>Summary
+                    </a>
+                </li>
                 {% endif %}
                 {% endwith %}
                 <li class="nav-item">
@@ -264,6 +270,11 @@
                         </option>
                     {% elif 'downloads' in request.path %}
                         <option value="/downloads/?route={{ rid }}"
+                                {% if rid == route_id %}selected{% endif %}>
+                            {{ rid }} — {{ rinfo.label|truncatechars:28 }}
+                        </option>
+                    {% elif 'summary' in request.path %}
+                        <option value="{% url 'survey:route_summary' rid %}"
                                 {% if rid == route_id %}selected{% endif %}>
                             {{ rid }} — {{ rinfo.label|truncatechars:28 }}
                         </option>

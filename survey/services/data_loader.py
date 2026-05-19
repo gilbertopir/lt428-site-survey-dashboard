@@ -20,16 +20,49 @@ PHOTO_DIR_PASSING_PLACES = MEDIA_ROOT / 'photos' / 'passing_places'
 
 # ── Colour maps ───────────────────────────────────────────────────────────────
 FEATURE_COLORS = {
-    'Gullies':               '#3498db',
-    'Lighting columns':      '#f39c12',
-    'Culverts / headwalls':  '#2ecc71',
-    'Sign posts':            '#e74c3c',
-    'Gates':                 '#9b59b6',
-    'Fencing':               '#1abc9c',
-    'Width':                 '#95a5a6',
-    'Custom / Other':        '#e67e22',
+    # Access & movement
+    'Accesses / driveways':      '#3498db',
+    'Junctions':                 '#2980b9',
+    'Bus stops / laybys':        '#1abc9c',
+    # Drainage
+    'Gullies':                   '#00bcd4',
+    'Culverts / headwalls':      '#0097a7',
+    'Drainage ditches':          '#26c6da',
+    'Manholes / chambers':       '#4dd0e1',
+    'Ponding / drainage issues': '#006064',
+    'Watercourses':              '#00838f',
+    # Structures & barriers
+    'Fencing':                   '#f39c12',
+    'Gates':                     '#e67e22',
+    'Bollards':                  '#ff8f00',
+    'Existing walls':            '#ff7043',
+    'Retaining walls':           '#bf360c',
+    'Kerbs / edging':            '#ffb300',
+    # Signage & lighting
+    'Sign posts':                '#e74c3c',
+    'Sign faces':                '#c0392b',
+    'Traffic signals':           '#ff5252',
+    'Lighting columns':          '#ffd600',
+    'Overhead lines / poles':    '#f9a825',
+    # Vegetation & earthworks
+    'Hedges':                    '#43a047',
+    'Trees':                     '#2e7d32',
+    'Verge edges':               '#66bb6a',
+    'Cuttings':                  '#a5d6a7',
+    'Embankments':               '#81c784',
+    # Road surface & defects
+    'Edge break-up':             '#9c27b0',
+    'Pavement defects':          '#7b1fa2',
+    'Road markings':             '#ce93d8',
+    # Utilities
+    'Cabinets / comms boxes':    '#ff6f00',
+    'Utility covers':            '#ef6c00',
+    'Utility marker posts':      '#e65100',
+    'VRS':                       '#d84315',
+    # Other
+    'Custom / Other':            '#78909c',
 }
-DEFAULT_COLOR = '#607d8b'
+DEFAULT_COLOR = '#ecf0f1'
 
 CONDITION_COLORS = {
     'GOOD': '#27ae60',
@@ -236,6 +269,51 @@ def feature_color(feature_type: str) -> str:
 
 def condition_color(condition: str) -> str:
     return CONDITION_COLORS.get(str(condition).upper(), DEFAULT_COLOR)
+
+
+# ── DXF route length ─────────────────────────────────────────────────────────
+def get_route_length_m(info: dict, df_features) -> float | None:
+    """
+    Returns total route length in metres.
+    Uses DXF polyline length if available (accurate full-route length),
+    falls back to chainage range from survey data.
+    """
+    if info.get('dxf'):
+        try:
+            import math
+            doc  = ezdxf.readfile(info['dxf'])
+            msp  = doc.modelspace()
+            # Try LWPOLYLINE first
+            for e in msp.query('LWPOLYLINE'):
+                pts = list(e.get_points())
+                if len(pts) > 1:
+                    length = sum(
+                        math.sqrt((pts[i+1][0]-pts[i][0])**2 + (pts[i+1][1]-pts[i][1])**2)
+                        for i in range(len(pts)-1)
+                    )
+                    return round(length)
+            # Fall back to POLYLINE
+            for e in msp.query('POLYLINE'):
+                verts = list(e.vertices)
+                if len(verts) > 1:
+                    length = sum(
+                        math.sqrt(
+                            (verts[i+1].dxf.location.x - verts[i].dxf.location.x)**2 +
+                            (verts[i+1].dxf.location.y - verts[i].dxf.location.y)**2
+                        )
+                        for i in range(len(verts)-1)
+                    )
+                    return round(length)
+        except Exception as exc:
+            print(f'[data_loader] DXF length failed: {exc}')
+
+    # Fallback — chainage range from survey points
+    try:
+        ch_min = float(df_features['Chainage (m)'].min())
+        ch_max = float(df_features['Chainage (m)'].max())
+        return round(ch_max - ch_min)
+    except Exception:
+        return None
 
 
 # ── Best-available alignment coords ──────────────────────────────────────────

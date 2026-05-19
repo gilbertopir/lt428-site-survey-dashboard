@@ -1,0 +1,346 @@
+{% extends "survey/base.html" %}
+{% load survey_tags %}
+{% block title %}Summary — {{ route_id }}{% endblock %}
+{% block nav_summary %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+    .summary-wrapper { padding: 1.5rem; }
+
+    /* ── Header strip ───────────────────────────────────────── */
+    .route-header {
+        background: linear-gradient(135deg, #051b63 0%, #0d2580 100%);
+        border-radius: 8px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+    .route-header h1 { font-size:1.3rem; margin:0; color:white; }
+    .route-header p  { font-size:0.78rem; color:rgba(255,255,255,0.55); margin:4px 0 0; }
+    .quick-stats { display:flex; gap:20px; flex-wrap:wrap; }
+    .qs { text-align:center; }
+    .qs .val {
+        font-family:'Roboto Condensed',sans-serif;
+        font-size:1.4rem; font-weight:700;
+        color:white; line-height:1;
+    }
+    .qs .lbl {
+        font-size:0.62rem; text-transform:uppercase;
+        letter-spacing:0.8px; color:rgba(255,255,255,0.45); margin-top:3px;
+    }
+
+    /* ── Two column ─────────────────────────────────────────── */
+    .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    /* ── Section card ───────────────────────────────────────── */
+    .sc {
+        background: #1a1a1a;
+        border: 1px solid #2e2e2e;
+        border-radius: 8px;
+        padding: 18px 20px;
+        margin-bottom: 16px;
+    }
+    .sc-title {
+        font-family:'Roboto Condensed',sans-serif;
+        font-size:0.75rem; text-transform:uppercase;
+        letter-spacing:1px; color:#555;
+        margin-bottom:14px; padding-bottom:8px;
+        border-bottom:1px solid #2e2e2e;
+    }
+
+    /* ── Stat grid ──────────────────────────────────────────── */
+    .sg { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px; margin-bottom:14px; }
+    .sb { background:#111; border:1px solid #2e2e2e; border-radius:6px; padding:10px 12px; text-align:center; }
+    .sb .v { font-family:'Roboto Condensed',sans-serif; font-size:1.35rem; font-weight:700; color:#f0f0f0; line-height:1; }
+    .sb .l { font-size:0.62rem; text-transform:uppercase; letter-spacing:0.5px; color:#555; margin-top:4px; }
+    .sb.g { border-color:var(--good); }
+    .sb.f { border-color:var(--fair); }
+    .sb.p { border-color:var(--poor); }
+    .sb.b { border-color:#3498db; }
+
+    /* ── Tables ─────────────────────────────────────────────── */
+    .st { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    .st th { background:#111; color:#555; font-size:0.68rem; text-transform:uppercase;
+             letter-spacing:0.5px; padding:7px 10px; border-bottom:1px solid #2e2e2e; text-align:left; }
+    .st td { padding:7px 10px; border-bottom:1px solid #1e1e1e; color:#ccc; vertical-align:middle; }
+    .st tr:last-child td { border-bottom:none; }
+    .num { text-align:right; font-weight:600; color:#f0f0f0; }
+
+    /* ── CSS bars ───────────────────────────────────────────── */
+    .bar-wrap { background:#111; border-radius:3px; height:8px; overflow:hidden; }
+    .bar-fill  { height:100%; border-radius:3px; }
+
+    /* ── Accuracy bands ─────────────────────────────────────── */
+    .acc-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:0.8rem; }
+    .acc-lbl  { width:65px; color:#888; text-align:right; flex-shrink:0; }
+    .acc-bar  { flex:1; background:#111; border-radius:3px; height:22px; overflow:hidden; }
+    .acc-fill { height:100%; border-radius:3px; display:flex; align-items:center;
+                padding-left:8px; font-size:0.7rem; font-weight:700; color:white; min-width:2px; }
+    .acc-num  { width:35px; color:#666; font-size:0.72rem; text-align:right; flex-shrink:0; }
+
+    /* ── Coverage bars ──────────────────────────────────────── */
+    .cov-row { margin-bottom:12px; }
+    .cov-labels { display:flex; justify-content:space-between; font-size:0.78rem; color:#aaa; margin-bottom:4px; }
+    .cov-labels b { color:#f0f0f0; }
+    .cov-bar { background:#111; border-radius:4px; height:10px; overflow:hidden; }
+    .cov-fill { height:100%; background:var(--tgp-navy); border-radius:4px; }
+
+    /* ── CEP note ───────────────────────────────────────────── */
+    .cep { background:#111; border-left:3px solid #3498db; border-radius:4px;
+           padding:10px 14px; font-size:0.73rem; color:#666; margin-top:12px; line-height:1.6; }
+
+    /* ── Hours per day chart ────────────────────────────────── */
+    .day-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; font-size:0.78rem; }
+    .day-lbl     { width:90px; color:#888; font-size:0.72rem; flex-shrink:0; }
+    .day-bar     { flex:1; background:#111; border-radius:3px; height:18px; overflow:hidden; }
+    .day-fill    { height:100%; background:#051b63; border-radius:3px;
+                   display:flex; align-items:center; padding-left:6px;
+                   font-size:0.68rem; font-weight:700; color:rgba(255,255,255,0.8); min-width:2px; }
+    .day-num     { width:35px; color:#666; font-size:0.72rem; text-align:right; flex-shrink:0; }
+
+    /* ── Hour heatmap ───────────────────────────────────────── */
+    .hour-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:3px; margin-top:6px; }
+    .hour-cell {
+        background:#111; border-radius:3px; padding:4px 2px;
+        text-align:center; font-size:0.6rem; color:#555;
+        position:relative;
+    }
+    .hour-cell .hc-val { font-size:0.7rem; font-weight:700; }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<div class="summary-wrapper">
+
+    <!-- ── Quick stats header ──────────────────────────────── -->
+    <div class="route-header">
+        <div>
+            <h1>📊 {{ route_id }} — Summary</h1>
+            <p>{{ info.label }}</p>
+        </div>
+        <div class="quick-stats">
+            <div class="qs"><div class="val">{{ n_features|add:n_pp }}</div><div class="lbl">Total Points</div></div>
+            <div class="qs"><div class="val">{{ n_features }}</div><div class="lbl">Features</div></div>
+            <div class="qs"><div class="val">{{ n_pp }}</div><div class="lbl">Passing Places</div></div>
+            <div class="qs"><div class="val">{{ route_length_m }}m</div><div class="lbl">Route Length</div></div>
+            <div class="qs"><div class="val">{{ survey_hours }}hr</div><div class="lbl">Survey Time</div></div>
+            <div class="qs"><div class="val">{{ survey_days }}</div><div class="lbl">Survey Days</div></div>
+            <div class="qs"><div class="val">{{ date_range_start }}</div><div class="lbl">Start</div></div>
+            <div class="qs"><div class="val">{{ date_range_end }}</div><div class="lbl">End</div></div>
+        </div>
+    </div>
+
+    <div class="two-col">
+
+        <!-- ════ LEFT COLUMN ══════════════════════════════════ -->
+        <div>
+
+            <!-- GPS Accuracy -->
+            <div class="sc">
+                <div class="sc-title"><i class="bi bi-crosshair me-1"></i>GPS Accuracy</div>
+                <div class="sg">
+                    <div class="sb b"><div class="v">{{ avg_acc|default:"—" }}</div><div class="l">Avg (m)</div></div>
+                    <div class="sb g"><div class="v">{{ best_acc|default:"—" }}</div><div class="l">Best (m)</div></div>
+                    <div class="sb p"><div class="v">{{ worst_acc|default:"—" }}</div><div class="l">Worst (m)</div></div>
+                </div>
+
+                {% with total_pts=n_features|add:n_pp %}
+                {% for band, count in bands.items %}
+                <div class="acc-row">
+                    <div class="acc-lbl">{{ band }}</div>
+                    <div class="acc-bar">
+                        <div class="acc-fill"
+                             style="width:{% if count and total_pts %}{% widthratio count total_pts 100 %}{% else %}0{% endif %}%;
+                                    background:{% if forloop.first %}#27ae60{% elif forloop.counter == 2 %}#3498db{% elif forloop.counter == 3 %}#f39c12{% else %}#e74c3c{% endif %};">
+                            {% if count %}{{ count }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="acc-num">{{ count }}</div>
+                </div>
+                {% endfor %}
+                {% endwith %}
+
+                <!-- Entry method -->
+                <div style="margin-top:14px;">
+                    <table class="st">
+                        <thead><tr><th>Entry Method</th><th class="num">Count</th></tr></thead>
+                        <tbody>
+                            {% for method, count in entry_counts.items %}
+                            <tr><td>{{ method }}</td><td class="num">{{ count }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="cep">
+                    <b>* CEP Note</b> — GPS accuracy figures represent Circular Error Probable:
+                    the radius within which the true position lies. A 5m reading does not mean
+                    the point is 5m offset — the true position clusters within that radius,
+                    typically near the centre.
+                </div>
+            </div>
+
+            <!-- Survey Productivity -->
+            <div class="sc">
+                <div class="sc-title"><i class="bi bi-calendar3 me-1"></i>Survey Productivity</div>
+                <div class="sg">
+                    <div class="sb"><div class="v">{{ survey_days }}</div><div class="l">Survey Days</div></div>
+                    <div class="sb"><div class="v">{{ peak_hour_str }}</div><div class="l">Peak Hour</div></div>
+                    <div class="sb b"><div class="v">{{ total_photos }}</div><div class="l">Photos</div></div>
+                    <div class="sb"><div class="v">{{ avg_photos }}</div><div class="l">Avg/Item</div></div>
+                </div>
+
+                <!-- Points per day -->
+                <div style="font-size:0.7rem; color:#555; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">
+                    Points per Day
+                </div>
+                {% for day in per_day_list %}
+                <div class="day-bar-row">
+                    <div class="day-lbl">{{ day.date }}</div>
+                    <div class="day-bar">
+                        <div class="day-fill"
+                             style="width:{% widthratio day.count per_day_max 100 %}%">
+                            {{ day.count }}
+                        </div>
+                    </div>
+                    <div class="day-num">{{ day.count }}</div>
+                </div>
+                {% endfor %}
+
+                <!-- Captures by hour -->
+                <div style="font-size:0.7rem; color:#555; text-transform:uppercase;
+                            letter-spacing:0.5px; margin-top:16px; margin-bottom:8px;">
+                    Captures by Hour
+                </div>
+                <div class="hour-grid">
+                    {% for h in hour_range %}
+                    <div class="hour-cell"
+                         style="background:rgba(5,27,99,{% if per_hour_map|get_item:h %}0.{% widthratio per_hour_map|get_item:h per_hour_max 100 %}{% else %}0.05{% endif %});">
+                        <div style="color:#555; font-size:0.58rem;">{{ h }}h</div>
+                        <div class="hc-val" style="color:{% if per_hour_map|get_item:h %}#f0f0f0{% else %}#333{% endif %}">
+                            {{ per_hour_map|get_item:h|default:"—" }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if surveyors %}
+                <div style="margin-top:16px;">
+                    <table class="st">
+                        <thead><tr><th>Captured By</th><th class="num">Points</th></tr></thead>
+                        <tbody>
+                            {% for name, count in surveyors.items %}
+                            <tr><td>{{ name }}</td><td class="num">{{ count }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+
+        </div>
+
+        <!-- ════ RIGHT COLUMN ════════════════════════════════ -->
+        <div>
+
+            <!-- Coverage & Photos -->
+            <div class="sc">
+                <div class="sc-title"><i class="bi bi-camera me-1"></i>Coverage &amp; Photos</div>
+                <div class="sg">
+                    <div class="sb"><div class="v">{{ n_features }}</div><div class="l">Features</div></div>
+                    <div class="sb"><div class="v">{{ n_pp }}</div><div class="l">Passing Places</div></div>
+                    <div class="sb b"><div class="v">{{ total_photos }}</div><div class="l">Total Photos</div></div>
+                    <div class="sb"><div class="v">{{ avg_photos }}</div><div class="l">Avg / Item</div></div>
+                </div>
+                <div class="cov-row">
+                    <div class="cov-labels">
+                        <span>Features with photos</span>
+                        <b>{{ feat_with_photo }} / {{ n_features }} ({{ feat_photo_pct }}%)</b>
+                    </div>
+                    <div class="cov-bar"><div class="cov-fill" style="width:{{ feat_photo_pct }}%"></div></div>
+                </div>
+                <div class="cov-row">
+                    <div class="cov-labels">
+                        <span>Passing places with photos</span>
+                        <b>{{ pp_with_photo }} / {{ n_pp }} ({{ pp_photo_pct }}%)</b>
+                    </div>
+                    <div class="cov-bar"><div class="cov-fill" style="width:{{ pp_photo_pct }}%"></div></div>
+                </div>
+            </div>
+
+            <!-- Condition split -->
+            <div class="sc">
+                <div class="sc-title"><i class="bi bi-pie-chart me-1"></i>Condition Split</div>
+                <div class="sg">
+                    <div class="sb g"><div class="v">{{ n_good }}</div><div class="l">Good</div></div>
+                    <div class="sb f"><div class="v">{{ n_fair }}</div><div class="l">Fair</div></div>
+                    <div class="sb p"><div class="v">{{ n_poor }}</div><div class="l">Poor</div></div>
+                </div>
+                <table class="st">
+                    <thead><tr><th>Condition</th><th class="num">Count</th><th style="width:40%"></th></tr></thead>
+                    <tbody>
+                        {% for item in cond_list %}
+                        <tr>
+                            <td style="font-weight:600;
+                                color:{% if item.condition == 'GOOD' %}var(--good)
+                                      {% elif item.condition == 'FAIR' %}var(--fair)
+                                      {% elif item.condition == 'POOR' %}var(--poor)
+                                      {% else %}#888{% endif %}">
+                                {{ item.condition }}
+                            </td>
+                            <td class="num">{{ item.count }}</td>
+                            <td>
+                                <div class="bar-wrap">
+                                    <div class="bar-fill"
+                                         style="width:{% widthratio item.count n_features 100 %}%;
+                                                background:{% if item.condition == 'GOOD' %}var(--good)
+                                                           {% elif item.condition == 'FAIR' %}var(--fair)
+                                                           {% elif item.condition == 'POOR' %}var(--poor)
+                                                           {% else %}#555{% endif %}">
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Feature breakdown -->
+            <div class="sc">
+                <div class="sc-title"><i class="bi bi-list-ul me-1"></i>Feature Breakdown</div>
+                <table class="st">
+                    <thead>
+                        <tr><th>Feature Type</th><th class="num">Count</th><th style="width:35%"></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in type_counts_list %}
+                        <tr>
+                            <td>{{ item.type }}</td>
+                            <td class="num">{{ item.count }}</td>
+                            <td>
+                                <div class="bar-wrap">
+                                    <div class="bar-fill"
+                                         style="width:{% widthratio item.count type_max 100 %}%;
+                                                background:#051b63;"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

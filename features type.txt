@@ -1,0 +1,34 @@
+Current list of available features:
+Accesses / driveways
+Bollards
+Bus stops / laybys
+Cabinets / comms boxes
+Culverts / headwalls
+Cuttings
+Drainage ditches
+Edge break-up
+Embankments
+Existing walls
+Fencing
+Gates
+Gullies
+Hedges
+Junctions
+Kerbs / edging
+Lighting columns
+Manholes / chambers
+Overhead lines / poles
+Pavement defects
+Ponding / drainage issues
+Retaining walls
+Road markings
+Sign faces
+Sign posts
+Traffic signals
+Trees
+Utility covers
+Utility marker posts
+Verge edges
+VRS
+Watercourses
+Custom / Other

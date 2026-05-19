@@ -3,7 +3,7 @@ survey/views.py
 """
 from django.shortcuts import render, redirect
 from django.http import Http404
-from .services.data_loader import scan_routes, load_route_data, build_tour, get_alignment_coords
+from .services.data_loader import scan_routes, load_route_data, build_tour, get_alignment_coords, get_route_length_m
 
 
 def overview(request):
@@ -294,11 +294,12 @@ def photo_library(request):
         except: pass
         return str(val).strip()
 
-    def make_new_name(route_id, item_id, feature_type, condition, chainage, original):
-        ext = original.rsplit('.', 1)[-1] if '.' in original else 'jpg'
-        ch  = f"CH{float(chainage):.0f}m" if chainage else ''
+    def make_new_name(route_id, item_id, feature_type, condition, chainage, original, index=None):
+        ext   = original.rsplit('.', 1)[-1] if '.' in original else 'jpg'
+        ch    = f"CH{float(chainage):.0f}m" if chainage else ''
+        idx   = f"_{index}" if index is not None else ''
         parts = [p for p in [route_id, item_id, feature_type, condition, ch] if p]
-        return '_'.join(parts).replace(' ', '_').replace('/', '_') + '.' + ext
+        return '_'.join(parts).replace(' ', '_').replace('/', '_') + idx + '.' + ext
 
     items = []
     for _, row in df_f.iterrows():
@@ -313,7 +314,8 @@ def photo_library(request):
                 route_id, safe_str(row['ID']),
                 safe_str(row.get('Feature Type', '')),
                 safe_str(row.get('Condition', '')),
-                row.get('Chainage (m)', ''), photo
+                row.get('Chainage (m)', ''), photo,
+                index=(i + 1) if len(photos) > 1 else None
             )
             items.append({
                 'id':           safe_str(row['ID']),
@@ -342,7 +344,8 @@ def photo_library(request):
                 route_id, safe_str(row['PP ID']),
                 'PassingPlace',
                 safe_str(row.get('Status', '')),
-                row.get('Mid Chainage (m)', ''), photo
+                row.get('Mid Chainage (m)', ''), photo,
+                index=(i + 1) if len(photos) > 1 else None
             )
             items.append({
                 'id':           safe_str(row['PP ID']),
@@ -368,11 +371,20 @@ def photo_library(request):
         selected = request.POST.getlist('selected_photos')
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            used_names = {}
             for item in items:
                 if item['photo'] in selected and item['has_photo']:
                     subfolder = 'passing_places' if item['kind'] == 'pp' else 'features'
                     src = settings.MEDIA_ROOT / 'photos' / subfolder / item['photo']
-                    zf.write(src, item['new_name'])
+                    # Guarantee unique name in zip
+                    name = item['new_name']
+                    if name in used_names:
+                        base, ext = name.rsplit('.', 1)
+                        used_names[name] += 1
+                        name = f"{base}_{used_names[name]}.{ext}"
+                    else:
+                        used_names[name] = 1
+                    zf.write(src, name)
         buf.seek(0)
         resp = HttpResponse(buf, content_type='application/zip')
         resp['Content-Disposition'] = f'attachment; filename="{route_id}_photos.zip"'
@@ -438,3 +450,187 @@ def photo_library(request):
         'with_photos':   sum(1 for i in items if i['has_photo']),
     }
     return render(request, 'survey/photo_library.html', context)
+
+def route_summary(request, route_id):
+    import json
+    import math
+    from collections import Counter
+    import pandas as pd
+
+    routes = scan_routes()
+    if route_id not in routes:
+        from django.http import Http404
+        raise Http404(f"Route {route_id} not found")
+
+    info = routes[route_id]
+    df_features, df_pp, summary = load_route_data(info['xlsx'])
+    first_route = list(routes.keys())[0] if routes else None
+
+    def safe_float(val):
+        try:
+            v = float(val)
+            return None if math.isnan(v) else v
+        except:
+            return None
+
+    # ── GPS Accuracy ──────────────────────────────────────────
+    acc_vals = [safe_float(v) for v in df_features['GPS Accuracy (m)'] if safe_float(v) is not None]
+    pp_acc   = [safe_float(v) for v in df_pp['GPS Accuracy (m)']       if safe_float(v) is not None]
+    all_acc  = acc_vals + pp_acc
+
+    avg_acc  = round(sum(all_acc) / len(all_acc), 2) if all_acc else None
+    best_acc = round(min(all_acc), 2) if all_acc else None
+    worst_acc= round(max(all_acc), 2) if all_acc else None
+
+    bands = {'< 5m': 0, '5–10m': 0, '10–15m': 0, '> 15m': 0}
+    for v in all_acc:
+        if   v < 5:  bands['< 5m']   += 1
+        elif v < 10: bands['5–10m']   += 1
+        elif v < 15: bands['10–15m']  += 1
+        else:        bands['> 15m']   += 1
+
+    # ── Entry Method — handled below with defaults ──────────
+
+    # ── Survey dates & productivity ───────────────────────────
+    df_features['_dt'] = pd.to_datetime(df_features['Captured At'], errors='coerce')
+    df_pp['_dt']       = pd.to_datetime(df_pp['Captured At'],       errors='coerce')
+
+    all_dt = pd.concat([df_features['_dt'], df_pp['_dt']]).dropna()
+
+    date_range_start = all_dt.min().strftime('%d %b %Y') if not all_dt.empty else '—'
+    date_range_end   = all_dt.max().strftime('%d %b %Y') if not all_dt.empty else '—'
+    survey_days      = all_dt.dt.date.nunique() if not all_dt.empty else 0
+
+    # Points per day
+    per_day = (
+        all_dt.dt.date.value_counts()
+        .sort_index()
+        .reset_index()
+    )
+    per_day.columns = ['date', 'count']
+    per_day['date'] = per_day['date'].astype(str)
+    per_day_json = per_day.to_dict('records')
+
+    # Captures by hour
+    per_hour = all_dt.dt.hour.value_counts().sort_index()
+    per_hour_json = [{'hour': int(h), 'count': int(c)} for h, c in per_hour.items()]
+
+    # Peak hour
+    peak_hour = int(per_hour.idxmax()) if not per_hour.empty else None
+    peak_hour_str = f"{peak_hour:02d}:00–{peak_hour+1:02d}:00" if peak_hour is not None else '—'
+
+    # Surveyors
+    surveyors = {}
+    if 'Captured By' in df_features.columns:
+        surveyors = df_features['Captured By'].value_counts().to_dict()
+
+    # ── Coverage & Photos ─────────────────────────────────────
+    n_features = len(df_features)
+    n_pp       = len(df_pp)
+
+    def count_photos(df):
+        total = 0
+        with_photo = 0
+        for v in df['Photo'].fillna(''):
+            photos = [p.strip() for p in str(v).split(',') if p.strip()]
+            if photos:
+                with_photo += 1
+                total += len(photos)
+        return with_photo, total
+
+    feat_with_photo, feat_total_photos = count_photos(df_features)
+    pp_with_photo,   pp_total_photos   = count_photos(df_pp)
+
+    total_photos   = feat_total_photos + pp_total_photos
+    total_items    = n_features + n_pp
+    items_w_photos = feat_with_photo + pp_with_photo
+    avg_photos     = round(total_photos / items_w_photos, 1) if items_w_photos > 0 else 0
+
+    feat_photo_pct = round(feat_with_photo / n_features * 100) if n_features > 0 else 0
+    pp_photo_pct   = round(pp_with_photo   / n_pp       * 100) if n_pp       > 0 else 0
+
+    # ── Feature breakdown ─────────────────────────────────────
+    # Feature type counts
+    tc = df_features['Feature Type'].value_counts().reset_index()
+    tc.columns = ['type', 'count']
+    type_counts_list = [{'type': str(r['type']), 'count': int(r['count'])}
+                        for _, r in tc.iterrows()]
+    type_max = max((x['count'] for x in type_counts_list), default=1)
+
+    # Condition counts
+    cond_list = [{'condition': k, 'count': int(v)}
+                 for k, v in df_features['Condition'].value_counts().items()]
+
+    # Route length — DXF if available, chainage range fallback
+    _length = get_route_length_m(info, df_features)
+    route_length_m = f"{_length:,}" if _length else '—' 
+
+    # Survey hours — sum of active time per day (last - first capture each day)
+    survey_hours = '—'
+    if not all_dt.empty:
+        total_secs = 0
+        for day, group in all_dt.groupby(all_dt.dt.date):
+            total_secs += (group.max() - group.min()).total_seconds()
+        survey_hours = f"{total_secs/3600:.1f}"
+
+    # Entry method — ensure Manual shows 0 if not present
+    if 'Entry Method' in df_features.columns:
+        all_methods = df_features['Entry Method'].value_counts().to_dict()
+        for m in ['GPS', 'Manual']:
+            if m not in all_methods:
+                all_methods[m] = 0
+        entry_counts = all_methods
+    else:
+        entry_counts = {'GPS': len(df_features), 'Manual': 0}
+
+    # Per day max for bar scaling
+    per_day_max = max((d['count'] for d in per_day_json), default=1)
+
+    # Per hour map for hour grid
+    per_hour_map = {item['hour']: item['count'] for item in per_hour_json}
+    per_hour_max = max(per_hour_map.values()) if per_hour_map else 1
+    hour_range   = list(range(24))
+
+    context = {
+        'routes':           routes,
+        'route_id':         route_id,
+        'first_route':      first_route,
+        'info':             info,
+        # Quick header stats
+        'route_length_m':   route_length_m,
+        'survey_hours':     survey_hours,
+        # GPS
+        'avg_acc':          avg_acc,
+        'best_acc':         best_acc,
+        'worst_acc':        worst_acc,
+        'bands':            bands,
+        'entry_counts':     entry_counts,
+        # Time
+        'date_range_start': date_range_start,
+        'date_range_end':   date_range_end,
+        'survey_days':      survey_days,
+        'per_day_list':     per_day_json,
+        'per_day_max':      per_day_max,
+        'per_hour_map':     per_hour_map,
+        'per_hour_max':     per_hour_max,
+        'hour_range':       hour_range,
+        'peak_hour_str':    peak_hour_str,
+        'surveyors':        surveyors,
+        # Coverage
+        'n_features':       n_features,
+        'n_pp':             n_pp,
+        'feat_with_photo':  feat_with_photo,
+        'feat_photo_pct':   feat_photo_pct,
+        'pp_with_photo':    pp_with_photo,
+        'pp_photo_pct':     pp_photo_pct,
+        'total_photos':     total_photos,
+        'avg_photos':       avg_photos,
+        # Feature breakdown
+        'type_counts_list': type_counts_list,
+        'type_max':         type_max,
+        'cond_list':        cond_list,
+        'n_good':           int((df_features['Condition'] == 'GOOD').sum()),
+        'n_fair':           int((df_features['Condition'] == 'FAIR').sum()),
+        'n_poor':           int((df_features['Condition'] == 'POOR').sum()),
+    }
+    return render(request, 'survey/summary.html', context)
