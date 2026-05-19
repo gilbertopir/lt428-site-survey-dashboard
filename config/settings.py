@@ -18,6 +18,12 @@ ALLOWED_HOSTS = os.environ.get(
     'localhost,127.0.0.1'
 ).split(',')
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8507",
+    "http://127.0.0.1:8507",
+    "http://172.16.192.11:8507",
+]
+
 # ── Apps ──────────────────────────────────────────────────────
 INSTALLED_APPS = [
     'django.contrib.admin',
