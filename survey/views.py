@@ -596,9 +596,19 @@ def route_summary(request, route_id):
     length_m       = float(_length) if _length else None
     s_hours        = float(survey_hours) if survey_hours != '—' else None
 
-    pts_per_metre  = round(total_points / length_m, 3)       if length_m and length_m > 0 else None
-    metres_per_pt  = round(length_m / total_points)           if length_m and total_points > 0 else None
-    pts_per_hour   = round(total_points / s_hours, 1)         if s_hours and s_hours > 0 else None
+    # Use surveyed chainage range for productivity metrics (not full DXF length)
+    surveyed_length = float(df_features['Chainage (m)'].max()) - float(df_features['Chainage (m)'].min())
+
+    pts_per_100m    = round(total_points / surveyed_length * 100, 1) if surveyed_length > 0 else None
+    pts_per_hour    = round(total_points / s_hours, 1)               if s_hours and s_hours > 0 else None
+    metres_per_hour = round(surveyed_length / s_hours)               if s_hours and s_hours > 0 else None
+
+    # Metres covered per day
+    df_features['_dt'] = pd.to_datetime(df_features['Captured At'], errors='coerce')
+    metres_per_day = {}
+    for date, group in df_features.dropna(subset=['_dt', 'Chainage (m)']).groupby(df_features['_dt'].dt.date):
+        ch_range = float(group['Chainage (m)'].max()) - float(group['Chainage (m)'].min())
+        metres_per_day[str(date)] = round(ch_range)
 
     context = {
         'routes':           routes,
@@ -607,8 +617,10 @@ def route_summary(request, route_id):
         'info':             info,
         # Quick header stats
         'route_length_m':   route_length_m,
-        'pts_per_metre':    pts_per_metre,
-        'metres_per_pt':    metres_per_pt,
+        'pts_per_100m':     pts_per_100m,
+        'metres_per_hour':  metres_per_hour,
+        'metres_per_day':     metres_per_day,
+        'metres_per_day_max': max(metres_per_day.values()) if metres_per_day else 1,
         'pts_per_hour':     pts_per_hour,
         'survey_hours':     survey_hours,
         # GPS
