@@ -456,7 +456,7 @@
 
     {% if stop.type == "Feature" %}
         {% with card_class="type-feature" badge_class="feature" %}
-        <div class="stop-card {{ card_class }}">
+        <div class="stop-card {{ card_class }}" id="stop-{{ stop.id }}">
 
             <!-- LEFT: specs -->
             <div class="stop-specs">
@@ -579,7 +579,7 @@
 
     {% else %}
         {% with card_class="type-passing-place" badge_class="passing-place" %}
-        <div class="stop-card {{ card_class }}">
+        <div class="stop-card {{ card_class }}" id="stop-{{ stop.id }}">
 
             <!-- LEFT: specs -->
             <div class="stop-specs">
@@ -757,6 +757,26 @@ window.addEventListener('scroll', function() {
         btn.style.display = window.scrollY > 400 ? 'flex' : 'none';
     }
 });
+
+// Scroll to item from URL hash
+(function() {
+    var hash = window.location.hash;
+    if (hash) {
+        var el = document.querySelector(hash);
+        if (el) {
+            setTimeout(function() {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Briefly highlight the card
+                el.style.outline = '3px solid #C41230';
+                el.style.outlineOffset = '3px';
+                setTimeout(function() {
+                    el.style.outline = '';
+                    el.style.outlineOffset = '';
+                }, 2500);
+            }, 400);
+        }
+    }
+})();
 
 function filterReport(query) {
     query = (query || '').toLowerCase().trim();
