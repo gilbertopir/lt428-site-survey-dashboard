@@ -191,12 +191,40 @@
 
             <!-- Survey Productivity -->
             <div class="sc">
-                <div class="sc-title"><i class="bi bi-calendar3 me-1"></i>Survey Productivity</div>
+                <div class="sc-title"><i class="bi bi-speedometer2 me-1"></i>Survey Productivity</div>
                 <div class="sg">
                     <div class="sb"><div class="v">{{ survey_days }}</div><div class="l">Survey Days</div></div>
                     <div class="sb"><div class="v">{{ peak_hour_str }}</div><div class="l">Peak Hour</div></div>
-                    <div class="sb b"><div class="v">{{ total_photos }}</div><div class="l">Photos</div></div>
-                    <div class="sb"><div class="v">{{ avg_photos }}</div><div class="l">Avg/Item</div></div>
+                    <div class="sb b">
+                        <div class="v">{{ pts_per_hour|default:"—" }}</div>
+                        <div class="l">Points / Hour</div>
+                    </div>
+                    <div class="sb b">
+                        <div class="v">{{ metres_per_pt|default:"—" }}</div>
+                        <div class="l">Metres / Point</div>
+                    </div>
+                </div>
+                <div style="background:#111; border:1px solid #2e2e2e; border-radius:6px;
+                            padding:12px 14px; margin-bottom:14px; font-size:0.8rem; line-height:1.8;">
+                    <div style="color:#555; font-size:0.68rem; text-transform:uppercase;
+                                letter-spacing:0.5px; margin-bottom:6px;">Coverage Density</div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:#aaa;">Points per metre</span>
+                        <b style="color:#f0f0f0;">{{ pts_per_metre|default:"—" }}</b>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:#aaa;">1 point every</span>
+                        <b style="color:#f0f0f0;">{{ metres_per_pt|default:"—" }} m</b>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:#aaa;">Capture rate</span>
+                        <b style="color:#f0f0f0;">{{ pts_per_hour|default:"—" }} pts/hr</b>
+                    </div>
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px solid #222;
+                                font-size:0.72rem; color:#555;">
+                        Use these metrics to estimate time for similar routes:
+                        <span style="color:#888;">new length (m) ÷ {{ metres_per_pt|default:"?" }}m × 1hr ÷ {{ pts_per_hour|default:"?" }} pts</span>
+                    </div>
                 </div>
 
                 <!-- Points per day -->

@@ -591,6 +591,15 @@ def route_summary(request, route_id):
     per_hour_max = max(per_hour_map.values()) if per_hour_map else 1
     hour_range   = list(range(24))
 
+    # Coverage & productivity metrics
+    total_points   = n_features + n_pp
+    length_m       = float(_length) if _length else None
+    s_hours        = float(survey_hours) if survey_hours != '—' else None
+
+    pts_per_metre  = round(total_points / length_m, 3)       if length_m and length_m > 0 else None
+    metres_per_pt  = round(length_m / total_points)           if length_m and total_points > 0 else None
+    pts_per_hour   = round(total_points / s_hours, 1)         if s_hours and s_hours > 0 else None
+
     context = {
         'routes':           routes,
         'route_id':         route_id,
@@ -598,6 +607,9 @@ def route_summary(request, route_id):
         'info':             info,
         # Quick header stats
         'route_length_m':   route_length_m,
+        'pts_per_metre':    pts_per_metre,
+        'metres_per_pt':    metres_per_pt,
+        'pts_per_hour':     pts_per_hour,
         'survey_hours':     survey_hours,
         # GPS
         'avg_acc':          avg_acc,
