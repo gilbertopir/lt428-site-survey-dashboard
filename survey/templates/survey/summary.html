@@ -404,6 +404,7 @@
                 <span style="color:#e74c3c;">━ Gap flagged</span>
                 <span style="color:#27ae60;">● First capture</span>
                 <span style="color:#f39c12;">● Last capture</span>
+                <span style="color:#f1c40f; text-shadow: 0 0 2px #000;">◆ Passing Place</span>
             </div>
             {% else %}
             <div style="margin-top:10px; font-size:0.75rem; color:#555;">
@@ -514,7 +515,96 @@
             multiplier × average spacing are flagged as potential missing coverage.
             Adjust the multiplier to increase or decrease sensitivity.
         </div>
+
+        <!-- Passing Places Spacing Table -->
+        {% if pp_spacing %}
+        <hr style="border-color:#2e2e2e; margin:20px 0;">
+        <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:1px;
+                    color:#555; margin-bottom:12px;">
+            <i class="bi bi-arrows-expand me-1"></i>Passing Places — Spacing &amp; Status
+        </div>
+        <table class="st">
+            <thead>
+                <tr>
+                    <th>PP ID</th>
+                    <th>Chainage (m)</th>
+                    <th>Distance to Previous (m)</th>
+                    <th>Status</th>
+                    <th>Side</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pp in pp_spacing %}
+                <tr>
+                    <td><b style="color:#f0f0f0;">{{ pp.id }}</b></td>
+                    <td>{{ pp.chainage|default:"—" }}</td>
+                    <td>
+                        {% if pp.spacing %}
+                            <span style="color:{% if pp.spacing > 1000 %}#f39c12{% else %}#ccc{% endif %};
+                                         font-weight:{% if pp.spacing > 1000 %}600{% else %}400{% endif %};">
+                                {{ pp.spacing }}
+                            </span>
+                        {% else %}
+                            <span style="color:#555;">—</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ pp.status }}</td>
+                    <td>{{ pp.side }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if pp_spacing|length > 1 %}
+        <div style="margin-top:10px; font-size:0.78rem; color:#666; text-align:center;">
+            Avg spacing between passing places:
+            <b style="color:#f0f0f0;">
+                {% with total=0 %}
+                {{ pp_avg_spacing }} m
+                {% endwith %}
+            </b>
+        </div>
+        {% endif %}
+        {% endif %}
+
     </div>
 
 </div>
+<!-- Scroll to top button -->
+<button id="scroll-top"
+        onclick="window.scrollTo({top:0, behavior:'smooth'})"
+        title="Back to top"
+        style="
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            width: 44px;
+            height: 44px;
+            background: var(--tgp-navy);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: background 0.2s;
+            z-index: 999;
+        "
+        onmouseover="this.style.background='#C41230'"
+        onmouseout="this.style.background='var(--tgp-navy)'">
+    <i class="bi bi-arrow-up"></i>
+</button>
+
+{% block extra_js %}
+<script>
+window.addEventListener('scroll', function() {
+    var btn = document.getElementById('scroll-top');
+    if (btn) btn.style.display = window.scrollY > 400 ? 'flex' : 'none';
+});
+</script>
+{% endblock %}
+
 {% endblock %}

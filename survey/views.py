@@ -626,6 +626,31 @@ def route_summary(request, route_id):
         ch_range = float(group['Chainage (m)'].max()) - float(group['Chainage (m)'].min())
         metres_per_day[str(date)] = round(ch_range)
 
+    # ── Passing places spacing helper ────────────────────────────
+    def _build_pp_spacing(df_pp):
+        import math
+        rows = []
+        df_sorted = df_pp.sort_values('Mid Chainage (m)').reset_index(drop=True)
+        for i, row in df_sorted.iterrows():
+            ch = row.get('Mid Chainage (m)')
+            try:
+                ch = float(ch) if ch and not math.isnan(float(ch)) else None
+            except:
+                ch = None
+            spacing = None
+            if i > 0 and ch is not None:
+                prev_ch = rows[-1]['chainage'] if rows else None
+                if prev_ch is not None:
+                    spacing = round(ch - prev_ch)
+            rows.append({
+                'id':       str(row.get('PP ID', '')),
+                'chainage': round(ch) if ch else None,
+                'status':   str(row.get('Status', '')),
+                'side':     str(row.get('Side', '')),
+                'spacing':  spacing,
+            })
+        return rows
+
     # ── Survey progress from DXF ─────────────────────────────────
     dxf_length    = float(_length) if _length else None
     first_chainage = float(df_features['Chainage (m)'].min())
@@ -735,7 +760,13 @@ def route_summary(request, route_id):
     if request.GET.get('gap_threshold'):
         from .services.gap_map import clear_coverage_map
         clear_coverage_map(route_id)
-    coverage_map_url = get_coverage_map(route_id, dxf_coords, survey_points, flagged_gaps)
+    pp_for_map = [
+        {'lat': float(r['Mid Latitude']), 'lon': float(r['Mid Longitude'])}
+        for _, r in df_pp.iterrows()
+        if r.get('Mid Latitude') and r.get('Mid Longitude')
+    ]
+    coverage_map_url = get_coverage_map(route_id, dxf_coords, survey_points,
+                                        flagged_gaps, passing_places=pp_for_map)
 
     context = {
         'routes':           routes,
@@ -757,6 +788,10 @@ def route_summary(request, route_id):
         'gap_threshold':    gap_threshold,
         'flagged_gaps':     flagged_gaps,
         'coverage_map_url': coverage_map_url,
+        # Passing places spacing table
+        'pp_spacing':       _build_pp_spacing(df_pp),
+        'pp_avg_spacing':   round(sum(p['spacing'] for p in _build_pp_spacing(df_pp) if p['spacing'])
+                            / max(1, sum(1 for p in _build_pp_spacing(df_pp) if p['spacing']))),
         'total_points':     len(all_points),
         'metres_per_hour':  metres_per_hour,
         'metres_per_day':     metres_per_day,

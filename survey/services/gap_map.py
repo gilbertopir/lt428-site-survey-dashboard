@@ -25,11 +25,12 @@ MAP_W, MAP_H = 900, 400
 
 
 def get_coverage_map(route_id: str, dxf_coords: list, survey_points: list,
-                     flagged_gaps: list) -> str | None:
+                     flagged_gaps: list, passing_places: list = None) -> str | None:
     """
     Generate and cache a coverage map image.
 
-    dxf_coords    — list of (lat, lon) for full DXF route
+    dxf_coords      — list of (lat, lon) for full DXF route
+    passing_places  — list of dicts with lat, lon for PP markers
     survey_points — list of dicts with 'lat', 'lon', 'chainage' sorted by chainage
     flagged_gaps  — list of gap dicts with from/to lat/lon
 
@@ -68,6 +69,12 @@ def get_coverage_map(route_id: str, dxf_coords: list, survey_points: list,
             last  = valid_pts[-1]
             m.add_marker(CircleMarker((first['lon'], first['lat']), "#27ae60", 10))
             m.add_marker(CircleMarker((last['lon'],  last['lat']),  "#f39c12", 10))
+
+        # ── Passing place markers — yellow with black outline ───────
+        for pp in (passing_places or []):
+            if pp.get('lat') and pp.get('lon'):
+                m.add_marker(CircleMarker((pp['lon'], pp['lat']), "#000000", 11))
+                m.add_marker(CircleMarker((pp['lon'], pp['lat']), "#f1c40f", 8))
 
         image = m.render()
         image.save(str(cache_path))
