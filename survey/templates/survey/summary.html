@@ -5,7 +5,7 @@
 
 {% block extra_head %}
 <style>
-    .summary-wrapper { padding: 1.5rem; }
+    .summary-wrapper { padding: 1.5rem 3rem; max-width: 1100px; margin: 0 auto; }
 
     /* ── Header strip ───────────────────────────────────────── */
     .route-header {
@@ -35,8 +35,8 @@
 
     /* ── Two column ─────────────────────────────────────────── */
     .two-col {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+        display: flex;
+        flex-direction: column;
         gap: 16px;
     }
 
@@ -69,10 +69,10 @@
     /* ── Tables ─────────────────────────────────────────────── */
     .st { width:100%; border-collapse:collapse; font-size:0.82rem; }
     .st th { background:#111; color:#555; font-size:0.68rem; text-transform:uppercase;
-             letter-spacing:0.5px; padding:7px 10px; border-bottom:1px solid #2e2e2e; text-align:left; }
-    .st td { padding:7px 10px; border-bottom:1px solid #1e1e1e; color:#ccc; vertical-align:middle; }
+             letter-spacing:0.5px; padding:7px 10px; border-bottom:1px solid #2e2e2e; text-align:center; }
+    .st td { padding:7px 10px; border-bottom:1px solid #1e1e1e; color:#ccc; vertical-align:middle; text-align:center; }
     .st tr:last-child td { border-bottom:none; }
-    .num { text-align:right; font-weight:600; color:#f0f0f0; }
+    .num { text-align:center; font-weight:600; color:#f0f0f0; }
 
     /* ── CSS bars ───────────────────────────────────────────── */
     .bar-wrap { background:#111; border-radius:3px; height:8px; overflow:hidden; }
@@ -159,8 +159,6 @@
 
     <div class="two-col">
 
-        <!-- ════ LEFT COLUMN ══════════════════════════════════ -->
-        <div>
 
             <!-- GPS Accuracy -->
             <div class="sc">
@@ -302,71 +300,6 @@
 
         </div>
 
-        <!-- ════ RIGHT COLUMN ════════════════════════════════ -->
-        <div>
-
-            <!-- Coverage & Photos -->
-            <div class="sc">
-                <div class="sc-title"><i class="bi bi-camera me-1"></i>Coverage &amp; Photos</div>
-                <div class="sg">
-                    <div class="sb"><div class="v">{{ n_features }}</div><div class="l">Features</div></div>
-                    <div class="sb"><div class="v">{{ n_pp }}</div><div class="l">Passing Places</div></div>
-                    <div class="sb b"><div class="v">{{ total_photos }}</div><div class="l">Total Photos</div></div>
-                    <div class="sb"><div class="v">{{ avg_photos }}</div><div class="l">Avg / Item</div></div>
-                </div>
-                <div class="cov-row">
-                    <div class="cov-labels">
-                        <span>Features with photos</span>
-                        <b>{{ feat_with_photo }} / {{ n_features }} ({{ feat_photo_pct }}%)</b>
-                    </div>
-                    <div class="cov-bar"><div class="cov-fill" style="width:{{ feat_photo_pct }}%"></div></div>
-                </div>
-                <div class="cov-row">
-                    <div class="cov-labels">
-                        <span>Passing places with photos</span>
-                        <b>{{ pp_with_photo }} / {{ n_pp }} ({{ pp_photo_pct }}%)</b>
-                    </div>
-                    <div class="cov-bar"><div class="cov-fill" style="width:{{ pp_photo_pct }}%"></div></div>
-                </div>
-            </div>
-
-            <!-- Condition split -->
-            <div class="sc">
-                <div class="sc-title"><i class="bi bi-pie-chart me-1"></i>Condition Split</div>
-                <div class="sg">
-                    <div class="sb g"><div class="v">{{ n_good }}</div><div class="l">Good</div></div>
-                    <div class="sb f"><div class="v">{{ n_fair }}</div><div class="l">Fair</div></div>
-                    <div class="sb p"><div class="v">{{ n_poor }}</div><div class="l">Poor</div></div>
-                </div>
-                <table class="st">
-                    <thead><tr><th>Condition</th><th class="num">Count</th><th style="width:40%"></th></tr></thead>
-                    <tbody>
-                        {% for item in cond_list %}
-                        <tr>
-                            <td style="font-weight:600;
-                                color:{% if item.condition == 'GOOD' %}var(--good)
-                                      {% elif item.condition == 'FAIR' %}var(--fair)
-                                      {% elif item.condition == 'POOR' %}var(--poor)
-                                      {% else %}#888{% endif %}">
-                                {{ item.condition }}
-                            </td>
-                            <td class="num">{{ item.count }}</td>
-                            <td>
-                                <div class="bar-wrap">
-                                    <div class="bar-fill"
-                                         style="width:{% widthratio item.count n_features 100 %}%;
-                                                background:{% if item.condition == 'GOOD' %}var(--good)
-                                                           {% elif item.condition == 'FAIR' %}var(--fair)
-                                                           {% elif item.condition == 'POOR' %}var(--poor)
-                                                           {% else %}#555{% endif %}">
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
 
             <!-- Feature breakdown -->
             <div class="sc">
@@ -395,5 +328,193 @@
 
         </div>
     </div>
+</div>
+
+    <!-- ── Gap Detection ──────────────────────────────────────── -->
+    <div class="sc" style="margin-top:4px;">
+        <div class="sc-title">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Survey Coverage — Gap Detection
+        </div>
+
+        <!-- Survey Progress -->
+        <div style="margin-bottom:20px;">
+            <div style="font-size:0.7rem; color:#555; text-transform:uppercase;
+                        letter-spacing:0.5px; margin-bottom:10px;">Survey Progress</div>
+
+            <div class="sg" style="margin-bottom:12px;">
+                <div class="sb b">
+                    <div class="v">{{ progress_pct|default:"—" }}%</div>
+                    <div class="l">Route Complete</div>
+                </div>
+                <div class="sb">
+                    <div class="v">{{ surveyed_length_m|default:"—" }}m</div>
+                    <div class="l">Surveyed</div>
+                </div>
+                <div class="sb">
+                    <div class="v">{{ dxf_length|default:"—" }}m</div>
+                    <div class="l">Full Route</div>
+                </div>
+                <div class="sb" style="border-color:#f39c12;">
+                    <div class="v">{{ start_offset_m|default:"—" }}m</div>
+                    <div class="l">Unsurveyed Start</div>
+                </div>
+                <div class="sb" style="border-color:#f39c12;">
+                    <div class="v">{{ end_offset_m|default:"—" }}m</div>
+                    <div class="l">Unsurveyed End</div>
+                </div>
+            </div>
+
+            <!-- Progress bar -->
+            {% if progress_pct %}
+            <div style="background:#111; border-radius:6px; height:16px;
+                        overflow:hidden; position:relative; margin-bottom:6px;">
+                <!-- Unsurveyed start -->
+                <div style="position:absolute; left:0; top:0; height:100%;
+                            width:{% widthratio start_offset_m dxf_length 100 %}%;
+                            background:#e74c3c; opacity:0.6;"></div>
+                <!-- Surveyed section -->
+                <div style="position:absolute; top:0; height:100%;
+                            left:{% widthratio start_offset_m dxf_length 100 %}%;
+                            width:{% widthratio surveyed_length_m dxf_length 100 %}%;
+                            background:#27ae60;"></div>
+                <!-- Unsurveyed end -->
+                <div style="position:absolute; right:0; top:0; height:100%;
+                            width:{% if end_offset_m %}{% widthratio end_offset_m dxf_length 100 %}{% else %}0{% endif %}%;
+                            background:#e74c3c; opacity:0.6;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between;
+                        font-size:0.68rem; color:#555;">
+                <span>0m</span>
+                <span style="color:#27ae60;">▐ Surveyed {{ progress_pct }}%</span>
+                <span>{{ dxf_length }}m</span>
+            </div>
+            {% endif %}
+
+            <!-- Coverage map -->
+            {% if coverage_map_url %}
+            <div style="margin-top:14px; border-radius:6px; overflow:hidden;
+                        border:1px solid #2e2e2e;">
+                <img src="{{ coverage_map_url }}" style="width:100%; display:block;"
+                     alt="Coverage map">
+            </div>
+            <div style="display:flex; gap:16px; margin-top:8px; font-size:0.72rem; color:#666;">
+                <span>⬜ Full route</span>
+                <span style="color:#27ae60;">━ Surveyed</span>
+                <span style="color:#e74c3c;">━ Gap flagged</span>
+                <span style="color:#27ae60;">● First capture</span>
+                <span style="color:#f39c12;">● Last capture</span>
+            </div>
+            {% else %}
+            <div style="margin-top:10px; font-size:0.75rem; color:#555;">
+                Coverage map not generated — run
+                <code style="background:#111; padding:1px 5px; border-radius:3px;">
+                generate_maps</code> first.
+            </div>
+            {% endif %}
+        </div>
+
+        <hr style="border-color:#2e2e2e; margin:0 0 16px;">
+
+        <!-- Controls -->
+        <form method="get" style="display:flex; align-items:center; gap:16px;
+                                   flex-wrap:wrap; margin-bottom:16px;">
+            <input type="hidden" name="route" value="{{ route_id }}">
+            <div style="display:flex; align-items:center; gap:10px; font-size:0.82rem;">
+                <label style="color:#888;">Gap threshold multiplier:</label>
+                <input type="number" name="gap_threshold"
+                       value="{{ gap_threshold }}" min="2" max="20" step="1"
+                       style="width:70px; background:#111; border:1px solid #2e2e2e;
+                              border-radius:5px; color:#f0f0f0; padding:5px 8px;
+                              font-size:0.82rem; outline:none; text-align:center;">
+                <span style="color:#666; font-size:0.78rem;">× average spacing</span>
+                <button type="submit"
+                        style="background:var(--tgp-navy); color:white; border:none;
+                               border-radius:5px; padding:6px 14px; cursor:pointer;
+                               font-size:0.78rem; font-family:'Roboto Condensed',sans-serif;
+                               font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
+                    Recalculate
+                </button>
+            </div>
+            <div style="display:flex; gap:20px; font-size:0.78rem; flex-wrap:wrap;">
+                <span style="color:#aaa;">
+                    Avg spacing: <b style="color:#f0f0f0;">{{ avg_spacing }} m</b>
+                </span>
+                <span style="color:#aaa;">
+                    Flag threshold: <b style="color:#f39c12;">≥ {{ threshold_m }} m
+                    ({{ gap_threshold }}×)</b>
+                </span>
+                <span style="color:#aaa;">
+                    Total points: <b style="color:#f0f0f0;">{{ total_points }}</b>
+                </span>
+            </div>
+        </form>
+
+        <!-- Results -->
+        {% if flagged_gaps %}
+        <div style="margin-bottom:10px; font-size:0.78rem; color:#f39c12;">
+            ⚠ {{ flagged_gaps|length }} potential gap{{ flagged_gaps|length|pluralize }}
+            detected
+        </div>
+        <table class="st">
+            <thead>
+                <tr>
+                    <th>From</th>
+                    <th>To</th>
+                    <th class="num">From (m)</th>
+                    <th class="num">To (m)</th>
+                    <th class="num">Gap (m)</th>
+                    <th class="num">Multiple</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for gap in flagged_gaps %}
+                <tr>
+                    <td>
+                        <span style="font-size:0.7rem; color:#666;">{{ gap.from_type }}</span><br>
+                        <b style="color:#f0f0f0;">{{ gap.from_id }}</b>
+                    </td>
+                    <td>
+                        <span style="font-size:0.7rem; color:#666;">{{ gap.to_type }}</span><br>
+                        <b style="color:#f0f0f0;">{{ gap.to_id }}</b>
+                    </td>
+                    <td class="num">{{ gap.from_chainage|floatformat:0 }}</td>
+                    <td class="num">{{ gap.to_chainage|floatformat:0 }}</td>
+                    <td class="num" style="color:#f39c12; font-weight:700;">
+                        {{ gap.spacing|floatformat:0 }}
+                    </td>
+                    <td class="num">
+                        <span style="color:{% if gap.multiple >= 8 %}#e74c3c
+                                          {% elif gap.multiple >= 6 %}#f39c12
+                                          {% else %}#aaa{% endif %};
+                                     font-weight:700;">
+                            {{ gap.multiple }}×
+                        </span>
+                    </td>
+                    <td></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="background:#111; border:1px solid #2e2e2e; border-radius:6px;
+                    padding:16px; text-align:center; color:#555; font-size:0.82rem;">
+            <i class="bi bi-check-circle" style="color:var(--good); font-size:1.5rem;
+               display:block; margin-bottom:8px;"></i>
+            No gaps detected above {{ threshold_m }}m threshold
+            ({{ gap_threshold }}× average spacing of {{ avg_spacing }}m)
+        </div>
+        {% endif %}
+
+        <div style="margin-top:12px; font-size:0.72rem; color:#444;
+                    line-height:1.6; text-align:center;">
+            * Gap detection compares spacing between consecutive captured points sorted by
+            chainage (features + passing places combined). Gaps exceeding the threshold
+            multiplier × average spacing are flagged as potential missing coverage.
+            Adjust the multiplier to increase or decrease sensitivity.
+        </div>
+    </div>
+
 </div>
 {% endblock %}

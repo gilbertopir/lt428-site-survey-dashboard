@@ -18,12 +18,6 @@ ALLOWED_HOSTS = os.environ.get(
     'localhost,127.0.0.1'
 ).split(',')
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:8507",
-    "http://127.0.0.1:8507",
-    "http://172.16.192.11:8507",
-]
-
 # ── Apps ──────────────────────────────────────────────────────
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -97,3 +91,6 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000   # 500 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000   # 500 MB
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── Survey gap detection ───────────────────────────────────────
+SURVEY_GAP_THRESHOLD = 8   # flag gaps > N x average spacing between points

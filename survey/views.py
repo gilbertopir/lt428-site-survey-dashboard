@@ -626,6 +626,117 @@ def route_summary(request, route_id):
         ch_range = float(group['Chainage (m)'].max()) - float(group['Chainage (m)'].min())
         metres_per_day[str(date)] = round(ch_range)
 
+    # ── Survey progress from DXF ─────────────────────────────────
+    dxf_length    = float(_length) if _length else None
+    first_chainage = float(df_features['Chainage (m)'].min())
+    last_chainage  = float(df_features['Chainage (m)'].max())
+    surveyed_length_m = last_chainage - first_chainage
+
+    progress_pct     = round(surveyed_length_m / dxf_length * 100, 1) if dxf_length else None
+    start_offset_m   = round(first_chainage)
+    end_offset_m     = round(dxf_length - last_chainage) if dxf_length else None
+
+    # ── Gap detection ────────────────────────────────────────────
+    from django.conf import settings as django_settings
+
+    # Get threshold from request (form submit) or settings default
+    gap_threshold = int(request.GET.get('gap_threshold',
+                        getattr(django_settings, 'SURVEY_GAP_THRESHOLD', 8)))
+
+    # Merge all captured points by chainage (features + passing places)
+    all_points = []
+    for _, row in df_features.iterrows():
+        ch = row.get('Chainage (m)')
+        if ch and not math.isnan(float(ch)):
+            all_points.append({
+                'id':       str(row['ID']),
+                'kind':     'Feature',
+                'type':     str(row.get('Feature Type', '')),
+                'chainage': float(ch),
+            })
+    for _, row in df_pp.iterrows():
+        ch = row.get('Mid Chainage (m)')
+        if ch and not math.isnan(float(ch)):
+            all_points.append({
+                'id':       str(row['PP ID']),
+                'kind':     'Passing Place',
+                'type':     'Passing Place',
+                'chainage': float(ch),
+            })
+
+    all_points.sort(key=lambda x: x['chainage'])
+
+    # Calculate gaps between consecutive points
+    gaps = []
+    spacings = []
+    for i in range(1, len(all_points)):
+        spacing = all_points[i]['chainage'] - all_points[i-1]['chainage']
+        spacings.append(spacing)
+        gaps.append({
+            'from_id':      all_points[i-1]['id'],
+            'from_type':    all_points[i-1]['kind'],
+            'to_id':        all_points[i]['id'],
+            'to_type':      all_points[i]['kind'],
+            'from_chainage': all_points[i-1]['chainage'],
+            'to_chainage':   all_points[i]['chainage'],
+            'spacing':       round(spacing, 1),
+        })
+
+    avg_spacing = round(sum(spacings) / len(spacings), 1) if spacings else 0
+    threshold_m = round(avg_spacing * gap_threshold, 1)
+
+    # Build lat/lon lookup from all points for gap map
+    ch_to_latlon = {}
+    for _, row in df_features.iterrows():
+        ch = row.get('Chainage (m)')
+        if ch and not math.isnan(float(ch)):
+            ch_to_latlon[float(ch)] = {
+                'lat': row.get('Latitude'), 'lon': row.get('Longitude')
+            }
+    for _, row in df_pp.iterrows():
+        ch = row.get('Mid Chainage (m)')
+        if ch and not math.isnan(float(ch)):
+            ch_to_latlon[float(ch)] = {
+                'lat': row.get('Mid Latitude'), 'lon': row.get('Mid Longitude')
+            }
+
+    flagged_gaps = []
+    for g in gaps:
+        if avg_spacing > 0 and g['spacing'] >= threshold_m:
+            from_ll = ch_to_latlon.get(g['from_chainage'], {})
+            to_ll   = ch_to_latlon.get(g['to_chainage'],   {})
+            flagged_gaps.append({
+                **g,
+                'multiple':  round(g['spacing'] / avg_spacing, 1),
+                'from_lat':  from_ll.get('lat'),
+                'from_lon':  from_ll.get('lon'),
+                'to_lat':    to_ll.get('lat'),
+                'to_lon':    to_ll.get('lon'),
+            })
+    flagged_gaps.sort(key=lambda x: x['spacing'], reverse=True)
+
+    # Generate coverage map
+    from .services.gap_map import get_coverage_map
+    dxf_coords    = get_alignment_coords(info, df_features)
+    survey_points = sorted(
+        [
+            {'lat': ch_to_latlon[p['chainage']]['lat'],
+             'lon': ch_to_latlon[p['chainage']]['lon'],
+             'chainage': p['chainage']}
+            for p in all_points
+            if p['chainage'] in ch_to_latlon
+            and ch_to_latlon[p['chainage']].get('lat')
+            and ch_to_latlon[p['chainage']].get('lon')
+        ],
+        key=lambda x: x['chainage']
+    )
+
+    # Regenerate map if threshold changed via form
+    if request.GET.get('gap_threshold'):
+        from .services.gap_map import clear_coverage_map
+        clear_coverage_map(route_id)
+    coverage_map_url = get_coverage_map(route_id, dxf_coords, survey_points, flagged_gaps)
+
     context = {
         'routes':           routes,
         'route_id':         route_id,
@@ -634,6 +745,19 @@ def route_summary(request, route_id):
         # Quick header stats
         'route_length_m':   route_length_m,
         'pts_per_100m':     pts_per_100m,
+        # Progress
+        'dxf_length':       round(dxf_length) if dxf_length else None,
+        'surveyed_length_m': round(surveyed_length_m),
+        'progress_pct':     progress_pct,
+        'start_offset_m':   start_offset_m,
+        'end_offset_m':     end_offset_m,
+        # Gap detection
+        'avg_spacing':      avg_spacing,
+        'threshold_m':      threshold_m,
+        'gap_threshold':    gap_threshold,
+        'flagged_gaps':     flagged_gaps,
+        'coverage_map_url': coverage_map_url,
+        'total_points':     len(all_points),
         'metres_per_hour':  metres_per_hour,
         'metres_per_day':     metres_per_day,
         'metres_per_day_max': max(metres_per_day.values()) if metres_per_day else 1,
