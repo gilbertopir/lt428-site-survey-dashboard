@@ -106,14 +106,32 @@
                    font-size:0.68rem; font-weight:700; color:rgba(255,255,255,0.8); min-width:2px; }
     .day-num     { width:35px; color:#666; font-size:0.72rem; text-align:right; flex-shrink:0; }
 
-    /* ── Hour heatmap ───────────────────────────────────────── */
-    .hour-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:3px; margin-top:6px; }
-    .hour-cell {
-        background:#111; border-radius:3px; padding:4px 2px;
-        text-align:center; font-size:0.6rem; color:#555;
+    /* ── Hour bar chart ─────────────────────────────────────── */
+    .hour-chart { margin-bottom:16px; }
+    .hour-chart-title {
+        font-size:0.7rem; color:#555; text-transform:uppercase;
+        letter-spacing:0.5px; margin-bottom:8px;
+    }
+    .hour-bars {
+        display:flex; align-items:flex-end; gap:3px;
+        height:80px; padding-bottom:20px; position:relative;
+        border-bottom:1px solid #2e2e2e;
+    }
+    .hour-col { display:flex; flex-direction:column; align-items:center; flex:1; }
+    .hour-bar-fill {
+        width:100%; background:#051b63; border-radius:2px 2px 0 0;
+        min-height:2px; transition:height 0.3s;
         position:relative;
     }
-    .hour-cell .hc-val { font-size:0.7rem; font-weight:700; }
+    .hour-bar-fill:hover { background:#1a3aaa; }
+    .hour-bar-fill .tip {
+        display:none; position:absolute; bottom:100%; left:50%;
+        transform:translateX(-50%); background:#222; color:#f0f0f0;
+        font-size:0.65rem; padding:2px 5px; border-radius:3px;
+        white-space:nowrap; margin-bottom:2px;
+    }
+    .hour-bar-fill:hover .tip { display:block; }
+    .hour-lbl { font-size:0.58rem; color:#555; margin-top:3px; }
 </style>
 {% endblock %}
 
@@ -132,7 +150,7 @@
             <div class="qs"><div class="val">{{ n_features }}</div><div class="lbl">Features</div></div>
             <div class="qs"><div class="val">{{ n_pp }}</div><div class="lbl">Passing Places</div></div>
             <div class="qs"><div class="val">{{ route_length_m }}m</div><div class="lbl">Route Length</div></div>
-            <div class="qs"><div class="val">{{ survey_hours }}hr</div><div class="lbl">Survey Time</div></div>
+            <div class="qs"><div class="val">{{ survey_hours }}hr</div><div class="lbl">Est. On-site</div></div>
             <div class="qs"><div class="val">{{ survey_days }}</div><div class="lbl">Survey Days</div></div>
             <div class="qs"><div class="val">{{ date_range_start }}</div><div class="lbl">Start</div></div>
             <div class="qs"><div class="val">{{ date_range_end }}</div><div class="lbl">End</div></div>
@@ -201,7 +219,7 @@
                     </div>
                     <div class="sb b">
                         <div class="v">{{ metres_per_hour|default:"—" }}</div>
-                        <div class="l">Metres / Hour</div>
+                        <div class="l">Metres / Est.hr</div>
                     </div>
                     <div class="sb b">
                         <div class="v">{{ pts_per_100m|default:"—" }}</div>
@@ -248,22 +266,25 @@
                 </div>
                 {% endfor %}
 
-                <!-- Captures by hour -->
-                <div style="font-size:0.7rem; color:#555; text-transform:uppercase;
-                            letter-spacing:0.5px; margin-top:16px; margin-bottom:8px;">
-                    Captures by Hour
-                </div>
-                <div class="hour-grid">
-                    {% for h in hour_range %}
-                    <div class="hour-cell"
-                         style="background:rgba(5,27,99,{% if per_hour_map|get_item:h %}0.{% widthratio per_hour_map|get_item:h per_hour_max 100 %}{% else %}0.05{% endif %});">
-                        <div style="color:#555; font-size:0.58rem;">{{ h }}h</div>
-                        <div class="hc-val" style="color:{% if per_hour_map|get_item:h %}#f0f0f0{% else %}#333{% endif %}">
-                            {{ per_hour_map|get_item:h|default:"—" }}
+                <!-- Captures by hour — vertical bars per day -->
+                {% for date, hours in per_hour_by_day.items %}
+                <div class="hour-chart">
+                    <div class="hour-chart-title">{{ date }} — Captures by Hour</div>
+                    <div class="hour-bars">
+                        {% for h in hours %}
+                        <div class="hour-col">
+                            <div class="hour-bar-fill"
+                                 style="height:{% if h.count and per_hour_max_all %}{% widthratio h.count per_hour_max_all 60 %}{% else %}0{% endif %}px;">
+                                {% if h.count %}
+                                <div class="tip">{{ h.hour }}:00 — {{ h.count }} pts</div>
+                                {% endif %}
+                            </div>
+                            <div class="hour-lbl">{{ h.hour }}</div>
                         </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
+                {% endfor %}
 
                 {% if surveyors %}
                 <div style="margin-top:16px;">

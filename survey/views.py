@@ -565,13 +565,16 @@ def route_summary(request, route_id):
     _length = get_route_length_m(info, df_features)
     route_length_m = f"{_length:,}" if _length else '—' 
 
-    # Survey hours — sum of active time per day (last - first capture each day)
+    # Est. on-site time — round first capture DOWN and last UP to whole hours per day
+    import math
     survey_hours = '—'
     if not all_dt.empty:
-        total_secs = 0
+        total_hours = 0
         for day, group in all_dt.groupby(all_dt.dt.date):
-            total_secs += (group.max() - group.min()).total_seconds()
-        survey_hours = f"{total_secs/3600:.1f}"
+            first_hour = math.floor(group.min().hour + group.min().minute / 60)
+            last_hour  = math.ceil(group.max().hour + group.max().minute / 60)
+            total_hours += last_hour - first_hour
+        survey_hours = str(total_hours)
 
     # Entry method — ensure Manual shows 0 if not present
     if 'Entry Method' in df_features.columns:
@@ -586,15 +589,28 @@ def route_summary(request, route_id):
     # Per day max for bar scaling
     per_day_max = max((d['count'] for d in per_day_json), default=1)
 
-    # Per hour map for hour grid
-    per_hour_map = {item['hour']: item['count'] for item in per_hour_json}
-    per_hour_max = max(per_hour_map.values()) if per_hour_map else 1
-    hour_range   = list(range(24))
+    # Per hour by day — combine features + passing places
+    df_pp['_dt'] = pd.to_datetime(df_pp['Captured At'], errors='coerce')
+    all_dt_combined = pd.concat([
+        df_features['_dt'].dropna(),
+        df_pp['_dt'].dropna()
+    ])
+    per_hour_by_day = {}
+    for dt_val, group in all_dt_combined.groupby(all_dt_combined.dt.date):
+        hour_counts = group.dt.hour.value_counts().sort_index()
+        per_hour_by_day[str(dt_val)] = [
+            {'hour': h, 'count': int(hour_counts.get(h, 0))}
+            for h in range(6, 20)   # show 06:00 to 19:00
+        ]
+    per_hour_max_all = max(
+        (h['count'] for day_data in per_hour_by_day.values() for h in day_data),
+        default=1
+    )
 
     # Coverage & productivity metrics
     total_points   = n_features + n_pp
     length_m       = float(_length) if _length else None
-    s_hours        = float(survey_hours) if survey_hours != '—' else None
+    s_hours        = float(survey_hours) if survey_hours not in ('—', '0') else None
 
     # Use surveyed chainage range for productivity metrics (not full DXF length)
     surveyed_length = float(df_features['Chainage (m)'].max()) - float(df_features['Chainage (m)'].min())
@@ -633,11 +649,10 @@ def route_summary(request, route_id):
         'date_range_start': date_range_start,
         'date_range_end':   date_range_end,
         'survey_days':      survey_days,
-        'per_day_list':     per_day_json,
-        'per_day_max':      per_day_max,
-        'per_hour_map':     per_hour_map,
-        'per_hour_max':     per_hour_max,
-        'hour_range':       hour_range,
+        'per_day_list':       per_day_json,
+        'per_day_max':        per_day_max,
+        'per_hour_by_day':    per_hour_by_day,
+        'per_hour_max_all':   per_hour_max_all,
         'peak_hour_str':    peak_hour_str,
         'surveyors':        surveyors,
         # Coverage
