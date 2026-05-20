@@ -93,4 +93,4 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000   # 500 MB
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── Survey gap detection ───────────────────────────────────────
-SURVEY_GAP_THRESHOLD = 8   # flag gaps > N x average spacing between points
+SURVEY_GAP_THRESHOLD = 10   # flag gaps > N x average spacing between points

@@ -666,7 +666,7 @@ def route_summary(request, route_id):
 
     # Get threshold from request (form submit) or settings default
     gap_threshold = int(request.GET.get('gap_threshold',
-                        getattr(django_settings, 'SURVEY_GAP_THRESHOLD', 8)))
+                        getattr(django_settings, 'SURVEY_GAP_THRESHOLD', 10)))
 
     # Merge all captured points by chainage (features + passing places)
     all_points = []

@@ -260,7 +260,23 @@
 
 
 {% block extra_js %}
+<button id="scroll-top"
+        onclick="window.scrollTo({top:0, behavior:'smooth'})"
+        title="Back to top"
+        style="position:fixed; bottom:28px; right:28px; width:44px; height:44px;
+               background:var(--tgp-navy); color:white; border:none; border-radius:50%;
+               font-size:1.1rem; cursor:pointer; display:none; align-items:center;
+               justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.5);
+               transition:background 0.2s; z-index:999;"
+        onmouseover="this.style.background='#C41230'"
+        onmouseout="this.style.background='var(--tgp-navy)'">
+    <i class="bi bi-arrow-up"></i>
+</button>
 <script>
+window.addEventListener('scroll', function() {
+    var btn = document.getElementById('scroll-top');
+    if (btn) btn.style.display = window.scrollY > 400 ? 'flex' : 'none';
+});
 // ── Search ────────────────────────────────────────────────────
 function filterPhotos(query) {
     query = (query || '').toLowerCase().trim();
