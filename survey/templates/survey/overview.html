@@ -81,6 +81,7 @@
         font-family: 'Roboto Condensed', sans-serif; font-weight: 700;
         font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px;
         text-decoration: none !important; transition: background 0.2s;
+        display: flex; align-items: center; justify-content: center;
     }
     .btn-card-primary   { background: var(--tgp-navy); color: white !important; }
     .btn-card-primary:hover { background: var(--tgp-red); }
@@ -160,8 +161,10 @@
             {% endif %}
 
             <div class="card-actions" onclick="event.stopPropagation()">
-                <a href="{% url 'survey:route_detail' card.route_id %}" class="btn-card btn-card-primary">Map &amp; Table →</a>
-                <a href="{% url 'survey:route_report' card.route_id %}"  class="btn-card btn-card-secondary">Report</a>
+                <a href="{% url 'survey:route_detail' card.route_id %}" class="btn-card btn-card-primary">Map &amp; Table</a>
+                <a href="{% url 'survey:route_report' card.route_id %}" class="btn-card btn-card-primary">Report</a>
+                <a href="{% url 'survey:route_summary' card.route_id %}" class="btn-card btn-card-primary">Summary</a>
+                <a href="{% url 'survey:photo_library' %}?route={{ card.route_id }}" class="btn-card btn-card-primary">Downloads</a>
             </div>
         </div>
         {% endwith %}

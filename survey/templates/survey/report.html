@@ -529,7 +529,7 @@
                                  style="cursor:zoom-in; transition:opacity 0.2s;"
                                  onload="setOrientation(this, 'wrap-{{ stop.id }}-0')"
                                  onmouseover="this.style.opacity='0.85'"
-                                 onmouseout="this.style.opacity='1'">
+                                 onmouseout="this.style.opacity='1'" loading="lazy">
                         </a>
                     </div>
                     {% else %}
@@ -540,7 +540,7 @@
                                      style="cursor:zoom-in; transition:opacity 0.2s;"
                                      onload="setOrientation(this, 'wrap-{{ stop.id }}-{{ forloop.counter }}')"
                                      onmouseover="this.style.opacity='0.85'"
-                                     onmouseout="this.style.opacity='1'">
+                                     onmouseout="this.style.opacity='1'" loading="lazy">
                             </a>
                         </div>
                         {% endfor %}
@@ -557,7 +557,7 @@
                     <div>
                         <div class="map-label">Route Overview</div>
                         {% if stop.overview_map_url %}
-                            <img src="{{ stop.overview_map_url }}" alt="Overview map">
+                            <img src="{{ stop.overview_map_url }}" alt="Overview map" loading="lazy">
                         {% else %}
                             <div class="no-map">No map</div>
                         {% endif %}
@@ -565,7 +565,7 @@
                     <div>
                         <div class="map-label">Location Detail</div>
                         {% if stop.detail_map_url %}
-                            <img src="{{ stop.detail_map_url }}" alt="Detail map">
+                            <img src="{{ stop.detail_map_url }}" alt="Detail map" loading="lazy">
                         {% else %}
                             <div class="no-map">No map</div>
                         {% endif %}
@@ -650,7 +650,7 @@
                                  style="cursor:zoom-in; transition:opacity 0.2s;"
                                  onload="setOrientation(this, 'wrap-{{ stop.id }}-0')"
                                  onmouseover="this.style.opacity='0.85'"
-                                 onmouseout="this.style.opacity='1'">
+                                 onmouseout="this.style.opacity='1'" loading="lazy">
                         </a>
                     </div>
                     {% else %}
@@ -661,7 +661,7 @@
                                      style="cursor:zoom-in; transition:opacity 0.2s;"
                                      onload="setOrientation(this, 'wrap-{{ stop.id }}-{{ forloop.counter }}')"
                                      onmouseover="this.style.opacity='0.85'"
-                                     onmouseout="this.style.opacity='1'">
+                                     onmouseout="this.style.opacity='1'" loading="lazy">
                             </a>
                         </div>
                         {% endfor %}
@@ -678,7 +678,7 @@
                     <div>
                         <div class="map-label">Route Overview</div>
                         {% if stop.overview_map_url %}
-                            <img src="{{ stop.overview_map_url }}" alt="Overview map">
+                            <img src="{{ stop.overview_map_url }}" alt="Overview map" loading="lazy">
                         {% else %}
                             <div class="no-map">No map</div>
                         {% endif %}
@@ -686,7 +686,7 @@
                     <div>
                         <div class="map-label">Location Detail</div>
                         {% if stop.detail_map_url %}
-                            <img src="{{ stop.detail_map_url }}" alt="Detail map">
+                            <img src="{{ stop.detail_map_url }}" alt="Detail map" loading="lazy">
                         {% else %}
                             <div class="no-map">No map</div>
                         {% endif %}

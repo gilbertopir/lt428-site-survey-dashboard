@@ -224,7 +224,7 @@
                 </li>
 
                 {% with ar=route_id|default:first_route %}
-                {% if ar %}
+                {% if ar and route_id %}
                 <li class="nav-item">
                     <a class="nav-link {% block nav_detail %}{% endblock %}"
                        href="{% url 'survey:route_detail' ar %}">
@@ -243,17 +243,17 @@
                         <i class="bi bi-bar-chart me-1"></i>Summary
                     </a>
                 </li>
-                {% endif %}
-                {% endwith %}
                 <li class="nav-item">
                     <a class="nav-link {% block nav_downloads %}{% endblock %}"
-                       href="{% url 'survey:photo_library' %}">
+                       href="{% url 'survey:photo_library' %}?route={{ ar }}">
                         <i class="bi bi-download me-1"></i>Downloads
                     </a>
                 </li>
+                {% endif %}
+                {% endwith %}
             </ul>
 
-            {% if routes and route_id %}
+            {% if routes and routes.keys and route_id %}
             <form class="d-flex align-items-center gap-2" method="get" action="">
                 <label class="text-white-50 small text-uppercase" style="white-space:nowrap; letter-spacing:.5px">
                     Route
@@ -261,6 +261,9 @@
                 <select class="form-select form-select-sm"
                         style="background:#0d2580; color:white; border-color:#1a3aaa; min-width:180px"
                         onchange="window.location=this.value">
+                    {% if not route_id %}
+                    <option value="" disabled selected style="color:#888;">Select route…</option>
+                    {% endif %}
                     {% for rid, rinfo in routes.items %}
                     {% block nav_route_option %}
                     {% if 'report' in request.path %}
