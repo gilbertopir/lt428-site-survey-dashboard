@@ -1,0 +1,140 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+
+<h2>Access Statistics — Last 30 Days</h2>
+
+<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px;">
+    <div style="background:#f9f9f9; border:1px solid #ddd; border-radius:6px;
+                padding:16px; text-align:center;">
+        <div style="font-size:2rem; font-weight:700; color:#051b63;">{{ total }}</div>
+        <div style="font-size:12px; color:#666; text-transform:uppercase;">Total Page Views</div>
+    </div>
+    <div style="background:#f9f9f9; border:1px solid #ddd; border-radius:6px;
+                padding:16px; text-align:center;">
+        <div style="font-size:2rem; font-weight:700; color:#051b63;">{{ unique_ips }}</div>
+        <div style="font-size:12px; color:#666; text-transform:uppercase;">Unique IPs</div>
+    </div>
+    <div style="background:#f9f9f9; border:1px solid #ddd; border-radius:6px;
+                padding:16px; text-align:center;">
+        <div style="font-size:2rem; font-weight:700; color:#051b63;">{{ per_day|length }}</div>
+        <div style="font-size:12px; color:#666; text-transform:uppercase;">Active Days</div>
+    </div>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+
+    <!-- Top IPs -->
+    <div>
+        <h3 style="font-size:14px; margin-bottom:10px;">Top IP Addresses</h3>
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+                <tr style="background:#f5f5f5; border-bottom:2px solid #ddd;">
+                    <th style="padding:8px 10px; text-align:left;">IP Address</th>
+                    <th style="padding:8px 10px; text-align:right;">Visits</th>
+                    <th style="padding:8px 10px; width:40%;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in top_ips %}
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:7px 10px;">{{ row.ip_address }}</td>
+                    <td style="padding:7px 10px; text-align:right; font-weight:600;">
+                        {{ row.n }}</td>
+                    <td style="padding:7px 10px;">
+                        <div style="background:#e0e0e0; border-radius:3px; height:8px;">
+                            <div style="background:#051b63; border-radius:3px; height:8px;
+                                        width:{% widthratio row.n top_ips.0.n 100 %}%;"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pages visited -->
+    <div>
+        <h3 style="font-size:14px; margin-bottom:10px;">Pages Visited</h3>
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+                <tr style="background:#f5f5f5; border-bottom:2px solid #ddd;">
+                    <th style="padding:8px 10px; text-align:left;">Page</th>
+                    <th style="padding:8px 10px; text-align:right;">Views</th>
+                    <th style="padding:8px 10px; width:40%;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in top_pages %}
+                <tr style="border-bottom:1px solid #eee;">
+                    <td style="padding:7px 10px;">{{ row.page }}</td>
+                    <td style="padding:7px 10px; text-align:right; font-weight:600;">
+                        {{ row.n }}</td>
+                    <td style="padding:7px 10px;">
+                        <div style="background:#e0e0e0; border-radius:3px; height:8px;">
+                            <div style="background:#C41230; border-radius:3px; height:8px;
+                                        width:{% widthratio row.n top_pages.0.n 100 %}%;"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<!-- Routes accessed -->
+{% if top_routes %}
+<h3 style="font-size:14px; margin-bottom:10px;">Routes Accessed</h3>
+<table style="width:100%; border-collapse:collapse; font-size:13px; margin-bottom:24px;">
+    <thead>
+        <tr style="background:#f5f5f5; border-bottom:2px solid #ddd;">
+            <th style="padding:8px 10px; text-align:left;">Route</th>
+            <th style="padding:8px 10px; text-align:right;">Views</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in top_routes %}
+        <tr style="border-bottom:1px solid #eee;">
+            <td style="padding:7px 10px; font-weight:600;">{{ row.route_id }}</td>
+            <td style="padding:7px 10px; text-align:right;">{{ row.n }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<!-- Daily activity -->
+<h3 style="font-size:14px; margin-bottom:10px;">Daily Activity</h3>
+<table style="width:100%; border-collapse:collapse; font-size:13px; margin-bottom:24px;">
+    <thead>
+        <tr style="background:#f5f5f5; border-bottom:2px solid #ddd;">
+            <th style="padding:8px 10px; text-align:left;">Date</th>
+            <th style="padding:8px 10px; text-align:right;">Page Views</th>
+            <th style="padding:8px 10px; width:50%;"></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in per_day %}
+        <tr style="border-bottom:1px solid #eee;">
+            <td style="padding:7px 10px;">{{ row.day }}</td>
+            <td style="padding:7px 10px; text-align:right; font-weight:600;">
+                {{ row.n }}</td>
+            <td style="padding:7px 10px;">
+                <div style="background:#e0e0e0; border-radius:3px; height:8px;">
+                    <div style="background:#27ae60; border-radius:3px; height:8px;
+                                width:{% widthratio row.n 50 100 %}%;
+                                max-width:100%;"></div>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div style="display:flex; gap:12px;">
+    <a href="/admin/survey/accesslog/" class="button">← View Full Log</a>
+    <a href="/admin/" class="button" style="background:#6c757d;">Admin Home</a>
+</div>
+
+{% endblock %}

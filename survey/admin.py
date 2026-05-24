@@ -13,7 +13,7 @@ from django.shortcuts import render, redirect
 from django.urls import path
 from django.utils.html import format_html
 
-from .models import MapGenerationLog
+from .models import MapGenerationLog, AccessLog
 from .services.data_loader import scan_routes, load_route_data, build_tour, get_alignment_coords
 from .services.map_renderer import get_stop_maps, clear_route_cache, CACHE_DIR
 
@@ -406,4 +406,72 @@ class MapGenerationLogAdmin(admin.ModelAdmin):
         return format_html(
             '<a class="button" href="{}">Regenerate</a>',
             f"/admin/survey/mapgenerationlog/generate/{obj.route_id}/",
+        )
+
+
+# ── Access Log Admin ──────────────────────────────────────────────────────────
+@admin.register(AccessLog)
+class AccessLogAdmin(admin.ModelAdmin):
+
+    change_list_template = 'admin/survey/accesslog/change_list.html'
+    list_display  = ('timestamp', 'ip_address', 'page', 'route_id', 'method')
+    list_filter   = ('page', 'route_id', 'method', 'ip_address')
+    search_fields = ('ip_address', 'path', 'route_id', 'page')
+    readonly_fields = ('timestamp', 'ip_address', 'path', 'route_id',
+                       'page', 'user_agent', 'method')
+    ordering      = ('-timestamp',)
+    date_hierarchy = 'timestamp'
+
+    # Show last 90 days by default, most recent first
+    list_per_page = 50
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                'stats/',
+                self.admin_site.admin_view(self.stats_view),
+                name='accesslog_stats',
+            ),
+        ]
+        return custom + urls
+
+    def stats_view(self, request):
+        from django.db.models import Count
+        from django.utils import timezone
+        import datetime
+
+        # Last 30 days
+        since = timezone.now() - datetime.timedelta(days=30)
+        logs  = AccessLog.objects.filter(timestamp__gte=since)
+
+        top_ips   = logs.values('ip_address').annotate(n=Count('id')).order_by('-n')[:10]
+        top_pages = logs.values('page').annotate(n=Count('id')).order_by('-n')
+        per_day   = (logs.extra(select={'day': "date(timestamp)"})
+                     .values('day').annotate(n=Count('id')).order_by('day'))
+        top_routes = (logs.exclude(route_id=None)
+                      .values('route_id').annotate(n=Count('id')).order_by('-n'))
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title':       'Access Statistics — Last 30 Days',
+            'total':       logs.count(),
+            'unique_ips':  logs.values('ip_address').distinct().count(),
+            'top_ips':     top_ips,
+            'top_pages':   top_pages,
+            'per_day':     per_day,
+            'top_routes':  top_routes,
+        }
+        return render(request, 'admin/survey/access_stats.html', context)
+
+    @admin.display(description='')
+    def stats_button(self, obj):
+        return format_html(
+            '<a class="button" href="../stats/">View Stats</a>'
         )

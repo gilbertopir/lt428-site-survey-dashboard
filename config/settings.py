@@ -32,6 +32,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'survey.middleware.AccessLogMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -94,3 +95,4 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── Survey gap detection ───────────────────────────────────────
 SURVEY_GAP_THRESHOLD = 10   # flag gaps > N x average spacing between points
+

@@ -227,7 +227,8 @@
                    onclick="event.stopPropagation()">
                     <img src="{{ item.photo_url }}"
                          class="photo-thumb"
-                         alt="{{ item.id }}">
+                         alt="{{ item.id }}"
+                         loading="lazy">
                 </a>
                 {% else %}
                 <div class="photo-no-thumb">
