@@ -362,6 +362,13 @@
     <button class="btn btn-tgp-red btn-sm px-4" onclick="window.print()">
         <i class="bi bi-printer me-2"></i>Print / Save PDF
     </button>
+    <a id="excel-link"
+       href="{% url 'survey:route_report_excel' route_id %}"
+       class="btn btn-sm px-4"
+       style="background:#1d6f42; color:white; font-family:'Roboto Condensed',sans-serif;
+              font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
+        <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export Excel
+    </a>
     <span class="text-muted small">Ctrl+P works too &nbsp;|&nbsp; Set layout to <b>Landscape</b> for best results</span>
 </div>
 
@@ -795,7 +802,17 @@ function filterReport(query) {
         el.textContent = query ? (shown + ' of ' + cards.length + ' stops match') : '';
         el.style.color = (shown === 0 && query) ? '#e74c3c' : '#666';
     }
+    updateExcelLink(query);
 }
+// Update Excel export link with current search query
+function updateExcelLink(query) {
+    var base = '{% url "survey:route_report_excel" route_id %}';
+    var link = document.getElementById('excel-link');
+    if (link) {
+        link.href = query ? base + '?q=' + encodeURIComponent(query) : base;
+    }
+}
+
 function clearReportSearch() {
     var input = document.getElementById('report-search');
     if (input) { input.value = ''; }

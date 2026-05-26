@@ -19,6 +19,9 @@ urlpatterns = [
     # Summary charts
     path('route/<str:route_id>/summary/', views.route_summary, name='route_summary'),
 
+    # Report Excel export
+    path('route/<str:route_id>/report/excel/', views.route_report_excel, name='route_report_excel'),
+
     # Photo library and downloads
     path('downloads/', views.photo_library, name='photo_library'),
 ]

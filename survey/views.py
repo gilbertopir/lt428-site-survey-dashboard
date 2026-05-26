@@ -225,6 +225,86 @@ def route_report(request, route_id):
     return render(request, 'survey/report.html', context)
 
 
+def route_report_excel(request, route_id):
+    import io
+    import math
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment
+    from django.http import HttpResponse
+
+    routes = scan_routes()
+    if route_id not in routes:
+        from django.http import Http404
+        raise Http404(f"Route {route_id} not found")
+
+    info = routes[route_id]
+    df_features, df_pp, summary = load_route_data(info["xlsx"])
+    tour = build_tour(df_features, df_pp)
+
+    # Apply same search filter as report page
+    query = request.GET.get("q", "").strip().lower()
+    if query:
+        def matches(stop):
+            searchable = " ".join([
+                str(stop.get("id", "")),
+                str(stop.get("type", "")),
+                str(stop.get("label", "")),
+                str(stop.get("condition", "")),
+                str(stop.get("side", "")),
+                str(stop.get("notes", "")),
+                str(stop.get("chainage", "")),
+            ]).lower()
+            return query in searchable
+        tour = [s for s in tour if matches(s)]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{route_id} Report"
+
+    # Header style
+    hdr_fill = PatternFill("solid", fgColor="051b63")
+    hdr_font = Font(bold=True, color="FFFFFF")
+    hdr_align = Alignment(horizontal="center", vertical="center")
+
+    headers = ["Type", "ID", "Label", "Chainage (m)", "Condition / Status",
+               "Side", "Easting", "Northing", "Notes", "Captured By", "Captured At"]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.fill  = hdr_fill
+        cell.font  = hdr_font
+        cell.alignment = hdr_align
+
+    for stop in tour:
+        # Extract extra specs
+        specs = {k: v for k, v in stop.get("specs", [])}
+        ws.append([
+            stop.get("type", ""),
+            stop.get("id", ""),
+            stop.get("label", ""),
+            round(float(stop["chainage"]), 1) if stop.get("chainage") else "",
+            stop.get("condition", ""),
+            stop.get("side", ""),
+            stop.get("easting", "") or specs.get("Easting", ""),
+            stop.get("northing", "") or specs.get("Northing", ""),
+            stop.get("notes", ""),
+            specs.get("Captured By", ""),
+            specs.get("Captured At", ""),
+        ])
+
+    # Auto width
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"{route_id}_report{'_filtered' if query else ''}.xlsx"
+    resp = HttpResponse(buf, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
+
 def route_summary(request, route_id):
     routes = scan_routes()
     if route_id not in routes:
@@ -450,6 +530,86 @@ def photo_library(request):
         'with_photos':   sum(1 for i in items if i['has_photo']),
     }
     return render(request, 'survey/photo_library.html', context)
+
+def route_report_excel(request, route_id):
+    import io
+    import math
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment
+    from django.http import HttpResponse
+
+    routes = scan_routes()
+    if route_id not in routes:
+        from django.http import Http404
+        raise Http404(f"Route {route_id} not found")
+
+    info = routes[route_id]
+    df_features, df_pp, summary = load_route_data(info["xlsx"])
+    tour = build_tour(df_features, df_pp)
+
+    # Apply same search filter as report page
+    query = request.GET.get("q", "").strip().lower()
+    if query:
+        def matches(stop):
+            searchable = " ".join([
+                str(stop.get("id", "")),
+                str(stop.get("type", "")),
+                str(stop.get("label", "")),
+                str(stop.get("condition", "")),
+                str(stop.get("side", "")),
+                str(stop.get("notes", "")),
+                str(stop.get("chainage", "")),
+            ]).lower()
+            return query in searchable
+        tour = [s for s in tour if matches(s)]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{route_id} Report"
+
+    # Header style
+    hdr_fill = PatternFill("solid", fgColor="051b63")
+    hdr_font = Font(bold=True, color="FFFFFF")
+    hdr_align = Alignment(horizontal="center", vertical="center")
+
+    headers = ["Type", "ID", "Label", "Chainage (m)", "Condition / Status",
+               "Side", "Easting", "Northing", "Notes", "Captured By", "Captured At"]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.fill  = hdr_fill
+        cell.font  = hdr_font
+        cell.alignment = hdr_align
+
+    for stop in tour:
+        # Extract extra specs
+        specs = {k: v for k, v in stop.get("specs", [])}
+        ws.append([
+            stop.get("type", ""),
+            stop.get("id", ""),
+            stop.get("label", ""),
+            round(float(stop["chainage"]), 1) if stop.get("chainage") else "",
+            stop.get("condition", ""),
+            stop.get("side", ""),
+            stop.get("easting", "") or specs.get("Easting", ""),
+            stop.get("northing", "") or specs.get("Northing", ""),
+            stop.get("notes", ""),
+            specs.get("Captured By", ""),
+            specs.get("Captured At", ""),
+        ])
+
+    # Auto width
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"{route_id}_report{'_filtered' if query else ''}.xlsx"
+    resp = HttpResponse(buf, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
+
 
 def route_summary(request, route_id):
     import json
