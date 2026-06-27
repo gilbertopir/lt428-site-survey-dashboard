@@ -104,20 +104,35 @@ def load_route_data(xlsx_path: str) -> tuple:
     df_features = pd.read_excel(xlsx_path, sheet_name='Features')
     df_pp       = pd.read_excel(xlsx_path, sheet_name='Passing Places')
 
+    # Structures sheet — optional, may be empty or missing
+    try:
+        df_structures = pd.read_excel(xlsx_path, sheet_name='Structures')
+    except Exception:
+        df_structures = pd.DataFrame()
+
+    # Summary sheet — optional
     try:
         df_summary = pd.read_excel(xlsx_path, sheet_name='Summary', header=None)
         summary = dict(zip(df_summary.iloc[:, 0], df_summary.iloc[:, 1]))
     except Exception:
         summary = {}
 
+    # Coerce coords
     for col in ['Latitude', 'Longitude']:
         df_features[col] = pd.to_numeric(df_features[col], errors='coerce')
     for col in ['Mid Latitude', 'Mid Longitude']:
         df_pp[col] = pd.to_numeric(df_pp[col], errors='coerce')
+    if not df_structures.empty:
+        for col in ['Latitude', 'Longitude']:
+            if col in df_structures.columns:
+                df_structures[col] = pd.to_numeric(df_structures[col], errors='coerce')
+        if 'Condition' in df_structures.columns:
+            df_structures['Condition'] = df_structures['Condition'].astype(str).str.upper().replace('NAN', 'UNKNOWN').fillna('UNKNOWN')
 
-    df_features['Condition'] = df_features['Condition'].str.upper().fillna('UNKNOWN')
+    # Normalise conditions
+    df_features['Condition'] = df_features['Condition'].astype(str).str.upper().replace('NAN', 'UNKNOWN').fillna('UNKNOWN')
 
-    return df_features, df_pp, summary
+    return df_features, df_pp, df_structures, summary
 
 
 def _fmt_en(val) -> str:
@@ -130,7 +145,7 @@ def _fmt_en(val) -> str:
 
 
 # ── Build tour (chainage-ordered merge for report + photo tour) ───────────────
-def build_tour(df_features, df_pp) -> list:
+def build_tour(df_features, df_pp, df_structures=None) -> list:
     """
     Merge features and passing places, sort by chainage.
     Returns a list of dicts ready for template rendering.
@@ -189,15 +204,57 @@ def build_tour(df_features, df_pp) -> list:
             'specs': [
                 ('Easting',  _fmt_en(row.get('Mid Easting', ''))),
                 ('Northing', _fmt_en(row.get('Mid Northing', ''))),
-                ('Width',        f"{row.get('Width (m)', '')} m"),
-                ('Length',       f"{row.get('Length (m)', '')} m"),
+                ('Down Road Width',         f"{row.get('Down Chainage Road Width (m)', '')} m"),
+                ('Down Taper Length',       f"{row.get('Down Chainage Taper Length (m)', '')} m"),
+                ('Usable Length',           f"{row.get('Usable Length (m)', '')} m"),
+                ('Vehicle Clearance Width', f"{row.get('Width (Vehicle Clearance) (m)', '')} m"),
+                ('Total Length',            f"{row.get('Total Length (m)', '')} m"),
+                ('Up Road Width',           f"{row.get('Up Chainage Road Width (m)', '')} m"),
+                ('Up Taper Length',         f"{row.get('Up Chainage Taper Length (m)', '')} m"),
                 ('GPS Accuracy', f"± {row.get('GPS Accuracy (m)', '')} m"),
                 ('Captured By',  str(row.get('Captured By', ''))),
                 ('Captured At',  str(row.get('Captured At', ''))[:16]),
             ],
         })
 
-    stops.sort(key=lambda s: s['chainage'])
+    # Structures
+    if df_structures is not None and not (hasattr(df_structures, 'empty') and df_structures.empty):
+        for _, row in df_structures.iterrows():
+            photo_file = str(row.get('Photo', '') or '').strip()
+            photo_urls = _photo_urls('structures', photo_file)
+            stops.append({
+                'type':      'Structure',
+                'id':        str(row.get('ID', '')),
+                'chainage':  row.get('Chainage (m)', 0),
+                'label':     str(row.get('Structure Name', '') or row.get('Feature Type', '')),
+                'condition': str(row.get('Condition', '') or ''),
+                'side':      str(row.get('Side', '') or ''),
+                'notes':     str(row.get('Notes', '') or '').strip(),
+                'lat':       row.get('Latitude'),
+                'lon':       row.get('Longitude'),
+                'photo_urls': photo_urls,
+                'color':     '#e74c3c',
+                'cond_color': CONDITION_COLORS.get(str(row.get('Condition', '')).upper(), '#607d8b'),
+                'specs': [
+                    ('Structure Name',      str(row.get('Structure Name', '') or '')),
+                    ('Feature Type',        str(row.get('Feature Type', '') or '')),
+                    ('Easting',             _fmt_en(row.get('Easting', ''))),
+                    ('Northing',            _fmt_en(row.get('Northing', ''))),
+                    ('Span',                f"{row.get('Span (mm)', '')} mm"),
+                    ('Rise',                f"{row.get('Rise (mm)', '')} mm"),
+                    ('Vehicle Clearance',   f"{row.get('Vehicle Clearance (mm)', '')} mm"),
+                    ('Parapet Height',      f"{row.get('Parapet Height (mm)', '')} mm"),
+                    ('Parapet Thickness',   f"{row.get('Parapet Thickness (mm)', '')} mm"),
+                    ('Footpath Width',      f"{row.get('Footpath Width (mm)', '')} mm"),
+                    ('Type of Stone',       str(row.get('Type of Stone', '') or '')),
+                    ('Recommended Action',  str(row.get('Recommended Action', '') or '')),
+                    ('GPS Accuracy',        f"± {row.get('GPS Accuracy (m)', '')} m"),
+                    ('Captured By',         str(row.get('Captured By', '') or '')),
+                    ('Captured At',         str(row.get('Captured At', '') or '')[:16]),
+                ],
+            })
+
+    stops.sort(key=lambda s: float(s['chainage']) if s['chainage'] else 0)
     return stops
 
 
@@ -309,11 +366,14 @@ def get_route_length_m(info: dict, df_features) -> float | None:
 
     # Fallback — chainage range from survey points
     try:
-        ch_min = float(df_features['Chainage (m)'].min())
-        ch_max = float(df_features['Chainage (m)'].max())
-        return round(ch_max - ch_min)
+        if df_features is not None and not df_features.empty:
+            ch_min = float(df_features['Chainage (m)'].min())
+            ch_max = float(df_features['Chainage (m)'].max())
+            if not (ch_min != ch_min or ch_max != ch_max):  # NaN check
+                return round(ch_max - ch_min)
     except Exception:
-        return None
+        pass
+    return None
 
 
 # ── Best-available alignment coords ──────────────────────────────────────────

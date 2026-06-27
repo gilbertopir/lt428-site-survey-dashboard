@@ -286,6 +286,7 @@
         <div class="stats-strip">
             <div class="strip-stat">Features <b>{{ n_features }}</b></div>
             <div class="strip-stat">Passing Places <b>{{ n_pp }}</b></div>
+            <div class="strip-stat">Structures <b>{{ n_structures }}</b></div>
             <div class="strip-stat" style="border-color:var(--good)">
                 Good <b style="color:var(--good)">{{ n_good }}</b>
             </div>
@@ -381,6 +382,37 @@
         </table>
         {% endif %}
 
+        {% if structures %}
+        <div class="section-title" style="margin-top:8px">Structures</div>
+        <table class="data-table" id="structures-table">
+            <thead>
+                <tr>
+                    <th>ID</th><th>Structure Name</th><th>Feature Type</th>
+                    <th>Condition</th><th>Side</th><th>Chainage (m)</th>
+                    <th>Span (mm)</th><th>Vehicle Clearance (mm)</th>
+                    <th>Recommended Action</th><th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in structures %}
+                <tr onclick="selectFromTable('{{ s.ID }}', 'structure')"
+                    id="row-structure-{{ s.ID }}">
+                    <td><b style="color:#f0f0f0">{{ s.ID }}</b></td>
+                    <td>{{ s|get_item:"Structure Name" }}</td>
+                    <td>{{ s|get_item:"Feature Type" }}</td>
+                    <td>{% with c=s.Condition %}<span class="cond-badge cond-badge-{{ c|lower }}">{{ c }}</span>{% endwith %}</td>
+                    <td>{{ s.Side }}</td>
+                    <td>{{ s|get_item:"Chainage (m)"|floatformat:1 }}</td>
+                    <td>{{ s|get_item:"Span (mm)" }}</td>
+                    <td>{{ s|get_item:"Vehicle Clearance (mm)" }}</td>
+                    <td>{{ s|get_item:"Recommended Action" }}</td>
+                    <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.Notes }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
     </div>
 
 </div>
@@ -392,6 +424,7 @@
 <script>
 // ── Data from Django ────────────────────────────────────────
 var FEATURES     = {{ features_json|safe }};
+var STRUCTURES   = {{ structures_json|safe }};
 var PP           = {{ pp_json|safe }};
 var ROUTE_COORDS = {{ route_coords|safe }};
 var ROUTE_ID     = "{{ route_id }}";
@@ -505,7 +538,15 @@ function highlightMarker(id, kind) {
                 ? PP.find(function(x) { return x.id === activeMarkerId.replace('pp-',''); })
                 : FEATURES.find(function(x) { return x.id === activeMarkerId.replace('feature-',''); });
             if (prevData) {
-                if (prevData.kind === 'pp') {
+                if (prevData.kind === 'structure') {
+                    prev.setIcon(L.divIcon({
+                        className: '',
+                        html: '<div style="width:16px;height:16px;background:#e74c3c;'
+                            + 'transform:rotate(45deg);border:2px solid #000000;'
+                            + 'box-shadow:0 0 4px rgba(0,0,0,0.7);"></div>',
+                        iconSize: [16,16], iconAnchor: [8,8],
+                    }));
+                } else if (prevData.kind === 'pp') {
                     prev.setIcon(L.divIcon({
                         className: '',
                         html: '<div style="width:18px;height:18px;background:#2ecc71;'
@@ -526,7 +567,15 @@ function highlightMarker(id, kind) {
     var key = kind + '-' + id;
     var marker = markerRegistry[key];
     if (marker) {
-        if (kind === 'pp') {
+        if (kind === 'structure') {
+            marker.setIcon(L.divIcon({
+                className: '',
+                html: '<div style="width:20px;height:20px;background:#ffff00;'
+                    + 'transform:rotate(45deg);border:3px solid #000000;'
+                    + 'box-shadow:0 0 6px rgba(0,0,0,0.8);"></div>',
+                iconSize: [20,20], iconAnchor: [10,10],
+            }));
+        } else if (kind === 'pp') {
             marker.setIcon(L.divIcon({
                 className: '',
                 html: '<div style="width:22px;height:22px;background:#ffff00;'
@@ -552,6 +601,8 @@ function highlightMarker(id, kind) {
 function selectItem(id, kind) {
     var data = kind === 'pp'
         ? PP.find(function(x) { return x.id === id; })
+        : kind === 'structure'
+        ? STRUCTURES.find(function(x) { return x.id === id; })
         : FEATURES.find(function(x) { return x.id === id; });
 
     if (!data) return;
@@ -562,7 +613,19 @@ function selectItem(id, kind) {
     var reportUrl = '/route/' + ROUTE_ID + '/report/';
 
     var specs = '';
-    if (kind === 'feature') {
+    if (kind === 'structure') {
+        specs += row('Structure', data.label);
+        specs += row('Condition', '<span class="' + condClass + '">' + data.condition + '</span>');
+        specs += row('Side', data.side);
+        specs += row('Chainage', data.chainage ? parseFloat(data.chainage).toFixed(1) + ' m' : '—');
+        specs += row('Easting', data.easting ? parseFloat(data.easting).toLocaleString() : '—');
+        specs += row('Northing', data.northing ? parseFloat(data.northing).toLocaleString() : '—');
+        if (data.span) specs += row('Span', data.span + ' mm');
+        if (data.vehicle_clearance) specs += row('Vehicle Clearance', data.vehicle_clearance + ' mm');
+        if (data.recommended_action) specs += row('Recommended Action', data.recommended_action);
+        specs += row('Captured By', data.captured_by || '—');
+        specs += row('Captured At', data.captured_at || '—');
+    } else if (kind === 'feature') {
         specs += row('Condition', '<span class="' + condClass + '">' + data.condition + '</span>');
         specs += row('Side', data.side);
         specs += row('Chainage', (data.chainage !== '' ? parseFloat(data.chainage).toFixed(1) + ' m' : '—'));
@@ -610,7 +673,6 @@ function row(key, val) {
 // ── Select from table row click ──────────────────────────────
 function selectFromTable(id, kind) {
     selectItem(id, kind);
-    // Pan map to marker
     var key    = kind + '-' + id;
     var marker = markerRegistry[key];
     if (marker) {
@@ -618,13 +680,30 @@ function selectFromTable(id, kind) {
     }
 }
 
+// ── Draw structure markers — red diamond ─────────────────────
+STRUCTURES.forEach(function(s) {
+    var icon = L.divIcon({
+        className: '',
+        html: '<div style="width:16px;height:16px;background:#e74c3c;'
+            + 'transform:rotate(45deg);border:2px solid #000000;'
+            + 'box-shadow:0 0 4px rgba(0,0,0,0.7);"></div>',
+        iconSize:    [16, 16],
+        iconAnchor:  [8, 8],
+        popupAnchor: [0, -10],
+    });
+    var marker = L.marker([s.lat, s.lon], { icon: icon }).addTo(map);
+    marker.on('click', function() { selectItem(s.id, 'structure'); });
+    marker.bindTooltip(s.id + ' · ' + s.label + ' · ' + s.condition);
+    markerRegistry['structure-' + s.id] = marker;
+});
+
 // ── Table search ─────────────────────────────────────────────
 function filterTables(query) {
     query = (query || '').toLowerCase().trim();
     var shown = 0;
     var total = 0;
 
-    ['features-table', 'pp-table'].forEach(function(tableId) {
+    ['features-table', 'pp-table', 'structures-table'].forEach(function(tableId) {
         var table = document.getElementById(tableId);
         if (!table) return;
         table.querySelectorAll('tbody tr').forEach(function(row) {

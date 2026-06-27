@@ -1,6 +1,14 @@
 """
 survey/views.py
 """
+import json
+import zipfile
+import io
+import math
+from datetime import datetime
+
+import pandas as pd
+
 from django.shortcuts import render, redirect
 from django.http import Http404
 from .services.data_loader import scan_routes, load_route_data, build_tour, get_alignment_coords, get_route_length_m
@@ -12,19 +20,30 @@ def overview(request):
 
     for route_id, info in routes.items():
         try:
-            df_features, df_pp, summary = load_route_data(info["xlsx"])
-            valid  = df_features.dropna(subset=["Latitude", "Longitude"])
-            coords = get_alignment_coords(info, df_features)
+            df_features, df_pp, df_structures, summary = load_route_data(info["xlsx"])
+
+            # Use features for GPS centre, fall back to structures
+            valid = df_features.dropna(subset=["Latitude", "Longitude"]) if not df_features.empty else pd.DataFrame()
+            if valid.empty and not df_structures.empty:
+                valid = df_structures.dropna(subset=["Latitude", "Longitude"])
+
+            coords = get_alignment_coords(info, df_features if not df_features.empty else df_structures)
+
+            # Route length from DXF first, then chainage fallback
+            _len = get_route_length_m(info, df_features)
+
             route_cards.append({
                 "route_id":   route_id,
                 "info":       info,
                 "n_features": len(df_features),
                 "n_pp":       len(df_pp),
-                "n_good":     int((df_features["Condition"] == "GOOD").sum()),
-                "n_fair":     int((df_features["Condition"] == "FAIR").sum()),
-                "n_poor":     int((df_features["Condition"] == "POOR").sum()),
-                "ch_min":     float(df_features["Chainage (m)"].min()),
-                "ch_max":     float(df_features["Chainage (m)"].max()),
+                "n_structures": len(df_structures) if not df_structures.empty else 0,
+                "n_good":     int((df_features["Condition"] == "GOOD").sum()) if not df_features.empty else 0,
+                "n_fair":     int((df_features["Condition"] == "FAIR").sum()) if not df_features.empty else 0,
+                "n_poor":     int((df_features["Condition"] == "POOR").sum()) if not df_features.empty else 0,
+                "ch_min":     float(df_features["Chainage (m)"].min()) if not df_features.empty else 0,
+                "ch_max":     float(df_features["Chainage (m)"].max()) if not df_features.empty else 0,
+                "route_length_m": _len,
                 "has_dxf":    bool(info["dxf"]),
                 "center_lat": float(valid["Latitude"].mean()) if not valid.empty else None,
                 "center_lon": float(valid["Longitude"].mean()) if not valid.empty else None,
@@ -84,6 +103,38 @@ def overview(request):
     })
 
 
+def _build_structures_json(df_structures, safe_fn):
+    """Build structures list for Leaflet map markers."""
+    result = []
+    if df_structures is None or (hasattr(df_structures, 'empty') and df_structures.empty):
+        return result
+    for _, row in df_structures.iterrows():
+        lat = safe_fn(row.get('Latitude'))
+        lon = safe_fn(row.get('Longitude'))
+        if not lat or not lon:
+            continue
+        result.append({
+            'id':        str(row.get('ID', '')),
+            'type':      'Structure',
+            'label':     str(row.get('Structure Name', '') or row.get('Feature Type', '')),
+            'condition': str(row.get('Condition', '')),
+            'side':      str(row.get('Side', '')),
+            'chainage':  safe_fn(row.get('Chainage (m)')),
+            'easting':   safe_fn(row.get('Easting', '')),
+            'northing':  safe_fn(row.get('Northing', '')),
+            'notes':     str(row.get('Notes', '') or ''),
+            'lat':       float(lat),
+            'lon':       float(lon),
+            'kind':      'structure',
+            'span':      safe_fn(row.get('Span (mm)', '')),
+            'vehicle_clearance': safe_fn(row.get('Vehicle Clearance (mm)', '')),
+            'recommended_action': str(row.get('Recommended Action', '') or ''),
+            'captured_by': str(row.get('Captured By', '') or ''),
+            'captured_at': str(row.get('Captured At', '') or '')[:16],
+        })
+    return result
+
+
 def route_detail(request, route_id):
     import json
     import math
@@ -93,7 +144,7 @@ def route_detail(request, route_id):
         raise Http404(f"Route {route_id} not found")
 
     info     = routes[route_id]
-    df_features, df_pp, summary = load_route_data(info["xlsx"])
+    df_features, df_pp, df_structures, summary = load_route_data(info["xlsx"])
 
     def safe(val):
         """Convert numpy/nan values to JSON-safe Python types."""
@@ -156,9 +207,11 @@ def route_detail(request, route_id):
     # Route alignment — DXF if available, GPS fallback
     route_coords = get_alignment_coords(info, df_features)
 
-    # Sort both tables by chainage
-    df_features  = df_features.sort_values("Chainage (m)").reset_index(drop=True)
-    df_pp        = df_pp.sort_values("Mid Chainage (m)").reset_index(drop=True)
+    # Sort all tables by chainage
+    df_features   = df_features.sort_values("Chainage (m)").reset_index(drop=True)
+    df_pp         = df_pp.sort_values("Mid Chainage (m)").reset_index(drop=True)
+    if not df_structures.empty and "Chainage (m)" in df_structures.columns:
+        df_structures = df_structures.sort_values("Chainage (m)").reset_index(drop=True)
 
     context = {
         "routes":        routes,
@@ -167,9 +220,12 @@ def route_detail(request, route_id):
         "info":          info,
         "features":      df_features.to_dict("records"),
         "passing_places": df_pp.to_dict("records"),
-        "features_json": json.dumps(features_json),
-        "pp_json":       json.dumps(pp_json),
-        "route_coords":  json.dumps(route_coords),
+        "features_json":  json.dumps(features_json),
+        "pp_json":        json.dumps(pp_json),
+        "route_coords":   json.dumps(route_coords),
+        "structures":     df_structures.to_dict("records") if not df_structures.empty else [],
+        "structures_json": json.dumps(_build_structures_json(df_structures, safe)),
+        "n_structures":   len(df_structures),
         "n_features":    len(df_features),
         "n_pp":          len(df_pp),
         "n_good":        int((df_features["Condition"] == "GOOD").sum()),
@@ -187,8 +243,8 @@ def route_report(request, route_id):
         raise Http404(f"Route {route_id} not found")
 
     info = routes[route_id]
-    df_features, df_pp, summary = load_route_data(info['xlsx'])
-    tour = build_tour(df_features, df_pp)
+    df_features, df_pp, df_structures, summary = load_route_data(info['xlsx'])
+    tour = build_tour(df_features, df_pp, df_structures)
 
     n_good = int((df_features['Condition'] == 'GOOD').sum())
     n_fair = int((df_features['Condition'] == 'FAIR').sum())
@@ -238,8 +294,8 @@ def route_report_excel(request, route_id):
         raise Http404(f"Route {route_id} not found")
 
     info = routes[route_id]
-    df_features, df_pp, summary = load_route_data(info["xlsx"])
-    tour = build_tour(df_features, df_pp)
+    df_features, df_pp, df_structures, summary = load_route_data(info["xlsx"])
+    tour = build_tour(df_features, df_pp, df_structures)
 
     # Apply same search filter as report page
     query = request.GET.get("q", "").strip().lower()
@@ -311,7 +367,7 @@ def route_summary(request, route_id):
         raise Http404(f"Route {route_id} not found")
 
     info = routes[route_id]
-    df_features, df_pp, summary = load_route_data(info['xlsx'])
+    df_features, df_pp, df_structures, summary = load_route_data(info['xlsx'])
 
     context = {
         'routes':     routes,
@@ -340,7 +396,7 @@ def photo_library(request):
         route_id = list(routes.keys())[0]
 
     info = routes[route_id]
-    df_features, df_pp, summary = load_route_data(info['xlsx'])
+    df_features, df_pp, df_structures, summary = load_route_data(info['xlsx'])
 
     # ── Filters ───────────────────────────────────────────────
     q_id      = request.GET.get('q_id', '').strip().lower()
@@ -544,8 +600,8 @@ def route_report_excel(request, route_id):
         raise Http404(f"Route {route_id} not found")
 
     info = routes[route_id]
-    df_features, df_pp, summary = load_route_data(info["xlsx"])
-    tour = build_tour(df_features, df_pp)
+    df_features, df_pp, df_structures, summary = load_route_data(info["xlsx"])
+    tour = build_tour(df_features, df_pp, df_structures)
 
     # Apply same search filter as report page
     query = request.GET.get("q", "").strip().lower()
@@ -617,13 +673,21 @@ def route_summary(request, route_id):
     from collections import Counter
     import pandas as pd
 
+    # Safe defaults — overwritten below if data available
+    surveyed_length_m = 0
+    first_chainage    = 0
+    last_chainage     = 0
+    progress_pct      = None
+    start_offset_m    = None
+    end_offset_m      = None
+
     routes = scan_routes()
     if route_id not in routes:
         from django.http import Http404
         raise Http404(f"Route {route_id} not found")
 
     info = routes[route_id]
-    df_features, df_pp, summary = load_route_data(info['xlsx'])
+    df_features, df_pp, df_structures, summary = load_route_data(info['xlsx'])
     first_route = list(routes.keys())[0] if routes else None
 
     def safe_float(val):
@@ -634,9 +698,10 @@ def route_summary(request, route_id):
             return None
 
     # ── GPS Accuracy ──────────────────────────────────────────
-    acc_vals = [safe_float(v) for v in df_features['GPS Accuracy (m)'] if safe_float(v) is not None]
-    pp_acc   = [safe_float(v) for v in df_pp['GPS Accuracy (m)']       if safe_float(v) is not None]
-    all_acc  = acc_vals + pp_acc
+    acc_vals = [safe_float(v) for v in df_features['GPS Accuracy (m)'] if safe_float(v) is not None] if not df_features.empty and 'GPS Accuracy (m)' in df_features.columns else []
+    pp_acc   = [safe_float(v) for v in df_pp['GPS Accuracy (m)']       if safe_float(v) is not None] if not df_pp.empty and 'GPS Accuracy (m)' in df_pp.columns else []
+    struct_acc = [safe_float(v) for v in df_structures['GPS Accuracy (m)'] if safe_float(v) is not None] if not df_structures.empty and 'GPS Accuracy (m)' in df_structures.columns else []
+    all_acc  = acc_vals + pp_acc + struct_acc
 
     avg_acc  = round(sum(all_acc) / len(all_acc), 2) if all_acc else None
     best_acc = round(min(all_acc), 2) if all_acc else None
@@ -652,8 +717,8 @@ def route_summary(request, route_id):
     # ── Entry Method — handled below with defaults ──────────
 
     # ── Survey dates & productivity ───────────────────────────
-    df_features['_dt'] = pd.to_datetime(df_features['Captured At'], errors='coerce')
-    df_pp['_dt']       = pd.to_datetime(df_pp['Captured At'],       errors='coerce')
+    df_features['_dt'] = pd.to_datetime(df_features['Captured At'], errors='coerce') if not df_features.empty else pd.Series(dtype='datetime64[ns]')
+    df_pp['_dt']       = pd.to_datetime(df_pp['Captured At'],       errors='coerce') if not df_pp.empty else pd.Series(dtype='datetime64[ns]')
 
     all_dt = pd.concat([df_features['_dt'], df_pp['_dt']]).dropna()
 
@@ -681,12 +746,13 @@ def route_summary(request, route_id):
 
     # Surveyors
     surveyors = {}
-    if 'Captured By' in df_features.columns:
+    if not df_features.empty and 'Captured By' in df_features.columns:
         surveyors = df_features['Captured By'].value_counts().to_dict()
 
     # ── Coverage & Photos ─────────────────────────────────────
-    n_features = len(df_features)
-    n_pp       = len(df_pp)
+    n_features   = len(df_features)
+    n_pp         = len(df_pp)
+    n_structures = len(df_structures) if not df_structures.empty else 0
 
     def count_photos(df):
         total = 0
@@ -698,8 +764,8 @@ def route_summary(request, route_id):
                 total += len(photos)
         return with_photo, total
 
-    feat_with_photo, feat_total_photos = count_photos(df_features)
-    pp_with_photo,   pp_total_photos   = count_photos(df_pp)
+    feat_with_photo, feat_total_photos = count_photos(df_features) if not df_features.empty else (0, 0)
+    pp_with_photo,   pp_total_photos   = count_photos(df_pp) if not df_pp.empty else (0, 0)
 
     total_photos   = feat_total_photos + pp_total_photos
     total_items    = n_features + n_pp
@@ -711,7 +777,7 @@ def route_summary(request, route_id):
 
     # ── Feature breakdown ─────────────────────────────────────
     # Feature type counts
-    tc = df_features['Feature Type'].value_counts().reset_index()
+    tc = df_features['Feature Type'].value_counts().reset_index() if not df_features.empty else pd.DataFrame(columns=['type','count'])
     tc.columns = ['type', 'count']
     type_counts_list = [{'type': str(r['type']), 'count': int(r['count'])}
                         for _, r in tc.iterrows()]
@@ -719,7 +785,7 @@ def route_summary(request, route_id):
 
     # Condition counts
     cond_list = [{'condition': k, 'count': int(v)}
-                 for k, v in df_features['Condition'].value_counts().items()]
+                 for k, v in df_features['Condition'].value_counts().items()] if not df_features.empty else []
 
     # Route length — DXF if available, chainage range fallback
     _length = get_route_length_m(info, df_features)
@@ -737,7 +803,7 @@ def route_summary(request, route_id):
         survey_hours = str(total_hours)
 
     # Entry method — ensure Manual shows 0 if not present
-    if 'Entry Method' in df_features.columns:
+    if not df_features.empty and 'Entry Method' in df_features.columns:
         all_methods = df_features['Entry Method'].value_counts().to_dict()
         for m in ['GPS', 'Manual']:
             if m not in all_methods:
@@ -773,7 +839,7 @@ def route_summary(request, route_id):
     s_hours        = float(survey_hours) if survey_hours not in ('—', '0') else None
 
     # Use surveyed chainage range for productivity metrics (not full DXF length)
-    surveyed_length = float(df_features['Chainage (m)'].max()) - float(df_features['Chainage (m)'].min())
+    surveyed_length = surveyed_length_m if surveyed_length_m else 0
 
     pts_per_100m    = round(total_points / surveyed_length * 100, 1) if surveyed_length > 0 else None
     pts_per_hour    = round(total_points / s_hours, 1)               if s_hours and s_hours > 0 else None
@@ -812,14 +878,30 @@ def route_summary(request, route_id):
         return rows
 
     # ── Survey progress from DXF ─────────────────────────────────
-    dxf_length    = float(_length) if _length else None
-    first_chainage = float(df_features['Chainage (m)'].min())
-    last_chainage  = float(df_features['Chainage (m)'].max())
-    surveyed_length_m = last_chainage - first_chainage
+    dxf_length = float(_length) if _length else None
 
-    progress_pct     = round(surveyed_length_m / dxf_length * 100, 1) if dxf_length else None
-    start_offset_m   = round(first_chainage)
-    end_offset_m     = round(dxf_length - last_chainage) if dxf_length else None
+    # Use all available chainage data (features + pp + structures)
+    all_chainages = []
+    if not df_features.empty and 'Chainage (m)' in df_features.columns:
+        all_chainages += df_features['Chainage (m)'].dropna().tolist()
+    if not df_pp.empty and 'Mid Chainage (m)' in df_pp.columns:
+        all_chainages += df_pp['Mid Chainage (m)'].dropna().tolist()
+    if not df_structures.empty and 'Chainage (m)' in df_structures.columns:
+        all_chainages += df_structures['Chainage (m)'].dropna().tolist()
+
+    if all_chainages:
+        first_chainage    = float(min(all_chainages))
+        last_chainage     = float(max(all_chainages))
+        surveyed_length_m = last_chainage - first_chainage
+        progress_pct      = round(surveyed_length_m / dxf_length * 100, 1) if dxf_length else None
+        start_offset_m    = round(first_chainage)
+        end_offset_m      = round(dxf_length - last_chainage) if dxf_length else None
+    elif dxf_length:
+        # No chainage data but DXF exists — use full DXF length
+        surveyed_length_m = dxf_length
+        progress_pct      = None
+        start_offset_m    = None
+        end_offset_m      = None
 
     # ── Gap detection ────────────────────────────────────────────
     from django.conf import settings as django_settings
@@ -976,6 +1058,7 @@ def route_summary(request, route_id):
         'surveyors':        surveyors,
         # Coverage
         'n_features':       n_features,
+        'n_structures':     n_structures,
         'n_pp':             n_pp,
         'feat_with_photo':  feat_with_photo,
         'feat_photo_pct':   feat_photo_pct,
@@ -987,8 +1070,8 @@ def route_summary(request, route_id):
         'type_counts_list': type_counts_list,
         'type_max':         type_max,
         'cond_list':        cond_list,
-        'n_good':           int((df_features['Condition'] == 'GOOD').sum()),
-        'n_fair':           int((df_features['Condition'] == 'FAIR').sum()),
-        'n_poor':           int((df_features['Condition'] == 'POOR').sum()),
+        'n_good':           int((df_features['Condition'] == 'GOOD').sum()) if not df_features.empty else 0,
+        'n_fair':           int((df_features['Condition'] == 'FAIR').sum()) if not df_features.empty else 0,
+        'n_poor':           int((df_features['Condition'] == 'POOR').sum()) if not df_features.empty else 0,
     }
     return render(request, 'survey/summary.html', context)

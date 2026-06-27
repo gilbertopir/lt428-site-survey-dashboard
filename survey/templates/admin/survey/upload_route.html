@@ -54,6 +54,19 @@
     </fieldset>
 
     <fieldset class="module aligned">
+        <h2>Structure Photos</h2>
+        <div class="form-row">
+            <label for="structure_photos">Photos (.jpg .png) or zip</label>
+            <input type="file" name="structure_photos" id="structure_photos"
+                   accept=".jpg,.jpeg,.png,.zip" multiple>
+            <p class="help" style="color:#555; font-size:12px;">
+                Photos for structures (bridges, culverts etc.).
+                Filenames must exactly match the <b>Photo</b> column in the Structures sheet.
+            </p>
+        </div>
+    </fieldset>
+
+    <fieldset class="module aligned">
         <h2>Passing Place Photos</h2>
         <div class="form-row">
             <label for="pp_photos">Photos (.jpg .png) or zip</label>

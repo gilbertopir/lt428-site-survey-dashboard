@@ -46,6 +46,28 @@ class MapGenerationLogAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    # ── Override changelist to show ALL routes, not just ones with logs ────────
+    def changelist_view(self, request, extra_context=None):
+        routes = scan_routes()
+        logs   = {log.route_id: log for log in MapGenerationLog.objects.all()}
+
+        # Auto-create placeholder log entries for routes without one
+        for route_id in routes:
+            if route_id not in logs:
+                log, created = MapGenerationLog.objects.get_or_create(
+                    route_id=route_id,
+                    defaults={
+                        'total_stops':   0,
+                        'success_count': 0,
+                        'fail_count':    0,
+                        'duration_secs': 0.0,
+                    }
+                )
+                if created:
+                    logs[route_id] = log
+
+        return super().changelist_view(request, extra_context=extra_context)
+
     # ── Extra URL: generation view ────────────────────────────────────────────
     def get_urls(self):
         urls = super().get_urls()
@@ -144,6 +166,15 @@ class MapGenerationLogAdmin(admin.ModelAdmin):
                     success_msgs.append(f'✅ Feature photos saved: {count} images')
                 except Exception as e:
                     error_msgs.append(f'❌ Feature photos error: {e}')
+
+            # structure photos
+            struct_files = request.FILES.getlist('structure_photos')
+            if struct_files:
+                try:
+                    count = save_photos(struct_files, MEDIA_ROOT / 'photos' / 'structures')
+                    success_msgs.append(f'✅ Structure photos saved: {count} images')
+                except Exception as e:
+                    error_msgs.append(f'❌ Structure photos error: {e}')
 
             # passing place photos — multiple files or zip
             pp_files = request.FILES.getlist('pp_photos')
@@ -318,7 +349,7 @@ class MapGenerationLogAdmin(admin.ModelAdmin):
             info = routes[route_id]
 
             try:
-                df_features, df_pp, _ = load_route_data(info["xlsx"])
+                df_features, df_pp, df_structures, _ = load_route_data(info["xlsx"])
             except Exception as exc:
                 messages.error(request, f"Could not load data for {route_id}: {exc}")
                 return redirect("admin:survey_generate_overview")
@@ -328,7 +359,7 @@ class MapGenerationLogAdmin(admin.ModelAdmin):
                 if deleted:
                     messages.info(request, f"Cleared {deleted} cached images for {route_id}.")
 
-            tour = build_tour(df_features, df_pp)
+            tour = build_tour(df_features, df_pp, df_structures)
             route_coords = get_alignment_coords(info, df_features)
 
             ok   = 0

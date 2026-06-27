@@ -75,6 +75,8 @@
     }
     .stop-card.type-feature       { border-left: 5px solid #C41230; }
     .stop-card.type-passing-place { border-left: 5px solid #27ae60; }
+    .stop-card.type-structure     { border-left: 5px solid #e74c3c; }
+    .type-badge.structure         { background: #c0392b; }
 
     .stop-specs {
         padding: 18px 22px;
@@ -313,6 +315,7 @@
         }
         .stop-card.type-feature       { border-left: 5px solid #C41230 !important; }
         .stop-card.type-passing-place { border-left: 5px solid #27ae60 !important; }
+        .stop-card.type-structure     { border-left: 5px solid #e74c3c !important; }
 
         .stop-specs { border-right-color: #ddd !important; }
         .stop-photo { background: #f9f9f9 !important; }
@@ -581,6 +584,76 @@
 
             </div>
 
+        </div>
+        {% endwith %}
+
+    {% elif stop.type == "Structure" %}
+        {% with card_class="type-structure" badge_class="structure" %}
+        <div class="stop-card {{ card_class }}" id="stop-{{ stop.id }}">
+            <div class="stop-specs">
+                <div class="stop-meta">
+                    <span class="type-badge {{ badge_class }}">Structure</span>
+                    <span class="chainage-tag"><i class="bi bi-geo-alt"></i> {{ stop.chainage|floatformat:1 }} m</span>
+                </div>
+                <div class="stop-id">{{ stop.id }}</div>
+                <div class="stop-label">{{ stop.label }}</div>
+                {% if stop.lat and stop.lon %}
+                <a href="https://www.google.com/maps?q={{ stop.lat }},{{ stop.lon }}"
+                   target="_blank" class="no-print"
+                   style="display:inline-flex;align-items:center;gap:6px;background:#4285F4;
+                          color:white;font-size:0.75rem;font-weight:600;padding:5px 12px;
+                          border-radius:4px;text-decoration:none;margin-bottom:12px;
+                          font-family:'Roboto Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="white" viewBox="0 0 16 16">
+                        <path d="M8 0C5.24 0 3 2.24 3 5c0 3.75 5 11 5 11s5-7.25 5-11c0-2.76-2.24-5-5-5zm0 7.5A2.5 2.5 0 1 1 8 2.5 2.5 2.5 0 0 1 8 7.5z"/>
+                    </svg>Open in Google Maps
+                </a>
+                {% endif %}
+                <table class="specs-table">
+                    {% for key, val in stop.specs %}
+                        {% if val and val != " m" and val != "±  m" and val != "nan" and val != " mm" %}
+                        <tr>
+                            <td class="spec-key">{{ key }}</td>
+                            <td class="spec-val">{{ val }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </table>
+                {% if stop.notes and stop.notes != "nan" %}
+                <div class="notes-box"><div class="notes-label">Notes</div>{{ stop.notes }}</div>
+                {% endif %}
+            </div>
+            <div class="stop-photo" style="flex-direction:column;align-items:stretch;gap:10px;">
+                {% if stop.photo_urls %}
+                    {% if stop.photo_urls|length == 1 %}
+                        <a href="{{ stop.photo_urls.0 }}" target="_blank" title="Click to view full size">
+                            <img src="{{ stop.photo_urls.0 }}" alt="{{ stop.id }}"
+                                 loading="lazy"
+                                 style="width:100%;max-height:260px;object-fit:cover;border-radius:6px;border:1px solid #333;cursor:zoom-in;">
+                        </a>
+                    {% else %}
+                        {% for url in stop.photo_urls %}
+                        <a href="{{ url }}" target="_blank">
+                            <img src="{{ url }}" alt="{{ stop.id }} photo {{ forloop.counter }}"
+                                 loading="lazy"
+                                 style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;border:1px solid #333;">
+                        </a>
+                        {% endfor %}
+                    {% endif %}
+                {% else %}
+                    <div class="no-photo"><i class="bi bi-camera"></i><span>No photo captured</span></div>
+                {% endif %}
+                <div class="stop-maps">
+                    <div><div class="map-label">Route Overview</div>
+                        {% if stop.overview_map_url %}<img src="{{ stop.overview_map_url }}" alt="Overview map" loading="lazy">
+                        {% else %}<div class="no-map">No map</div>{% endif %}
+                    </div>
+                    <div><div class="map-label">Location Detail</div>
+                        {% if stop.detail_map_url %}<img src="{{ stop.detail_map_url }}" alt="Detail map" loading="lazy">
+                        {% else %}<div class="no-map">No map</div>{% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
         {% endwith %}
 
