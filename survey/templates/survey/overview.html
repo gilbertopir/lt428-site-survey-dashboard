@@ -140,7 +140,11 @@
                     <div class="lbl">Passing Pl.</div>
                 </div>
                 <div class="card-stat">
-                    <div class="val">{{ card.ch_max|floatformat:0 }}</div>
+                    <div class="val">{{ card.n_structures }}</div>
+                    <div class="lbl">Structures</div>
+                </div>
+                <div class="card-stat">
+                    <div class="val">{% if card.route_length_m %}{{ card.route_length_m }}{% else %}—{% endif %}</div>
                     <div class="lbl">Length (m)</div>
                 </div>
             </div>
