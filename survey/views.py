@@ -288,6 +288,18 @@ def route_report(request, route_id):
         'ch_max':     tour[-1]['chainage'] if tour else 0,
         'maps_ready': maps_ready,
         'report_overview_map': report_overview_map,
+        # Sidebar filter data
+        'filter_feature_types': (
+            df_features['Feature Type'].value_counts().to_dict()
+            if not df_features.empty else {}
+        ),
+        'filter_n_features':    len(df_features),
+        'filter_n_pp':          len(df_pp),
+        'filter_n_structures':  len(df_structures) if not df_structures.empty else 0,
+        'filter_conditions':    (
+            df_features['Condition'].value_counts().to_dict()
+            if not df_features.empty else {}
+        ),
         'ch_interval_m':       ch_interval_m,
     }
     return render(request, 'survey/report.html', context)
@@ -309,21 +321,34 @@ def route_report_excel(request, route_id):
     df_features, df_pp, df_structures, summary = load_route_data(info["xlsx"])
     tour = build_tour(df_features, df_pp, df_structures)
 
-    # Apply same search filter as report page
-    query = request.GET.get("q", "").strip().lower()
-    if query:
-        def matches(stop):
+    # Apply same filters as report page (checkboxes + search)
+    query  = request.GET.get("q", "").strip().lower()
+    types  = [t.strip() for t in request.GET.get("types",  "").split(",") if t.strip()]
+    ftypes = [t.strip() for t in request.GET.get("ftypes", "").split(",") if t.strip()]
+    type_map = {"feature": "Feature", "passing-place": "Passing Place", "structure": "Structure"}
+
+    def matches(stop):
+        stop_kind = stop.get("type", "")
+        if types:
+            kind_key = {v: k for k, v in type_map.items()}.get(stop_kind, "")
+            if kind_key not in types:
+                return False
+        if ftypes and stop_kind == "Feature":
+            if stop.get("label", "") not in ftypes:
+                return False
+        if query:
             searchable = " ".join([
-                str(stop.get("id", "")),
-                str(stop.get("type", "")),
-                str(stop.get("label", "")),
-                str(stop.get("condition", "")),
-                str(stop.get("side", "")),
-                str(stop.get("notes", "")),
+                str(stop.get("id", "")), str(stop.get("type", "")),
+                str(stop.get("label", "")), str(stop.get("condition", "")),
+                str(stop.get("side", "")), str(stop.get("notes", "")),
                 str(stop.get("chainage", "")),
             ]).lower()
-            return query in searchable
-        tour = [s for s in tour if matches(s)]
+            if query not in searchable:
+                return False
+        return True
+
+    tour = [s for s in tour if matches(s)]
+    is_filtered = bool(query or types or ftypes)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -367,7 +392,7 @@ def route_report_excel(request, route_id):
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    filename = f"{route_id}_report{'_filtered' if query else ''}.xlsx"
+    filename = f"{route_id}_report{'_filtered' if is_filtered else ''}.xlsx"
     resp = HttpResponse(buf, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     resp['Content-Disposition'] = f'attachment; filename="{filename}"'
     return resp
@@ -615,21 +640,34 @@ def route_report_excel(request, route_id):
     df_features, df_pp, df_structures, summary = load_route_data(info["xlsx"])
     tour = build_tour(df_features, df_pp, df_structures)
 
-    # Apply same search filter as report page
-    query = request.GET.get("q", "").strip().lower()
-    if query:
-        def matches(stop):
+    # Apply same filters as report page (checkboxes + search)
+    query  = request.GET.get("q", "").strip().lower()
+    types  = [t.strip() for t in request.GET.get("types",  "").split(",") if t.strip()]
+    ftypes = [t.strip() for t in request.GET.get("ftypes", "").split(",") if t.strip()]
+    type_map = {"feature": "Feature", "passing-place": "Passing Place", "structure": "Structure"}
+
+    def matches(stop):
+        stop_kind = stop.get("type", "")
+        if types:
+            kind_key = {v: k for k, v in type_map.items()}.get(stop_kind, "")
+            if kind_key not in types:
+                return False
+        if ftypes and stop_kind == "Feature":
+            if stop.get("label", "") not in ftypes:
+                return False
+        if query:
             searchable = " ".join([
-                str(stop.get("id", "")),
-                str(stop.get("type", "")),
-                str(stop.get("label", "")),
-                str(stop.get("condition", "")),
-                str(stop.get("side", "")),
-                str(stop.get("notes", "")),
+                str(stop.get("id", "")), str(stop.get("type", "")),
+                str(stop.get("label", "")), str(stop.get("condition", "")),
+                str(stop.get("side", "")), str(stop.get("notes", "")),
                 str(stop.get("chainage", "")),
             ]).lower()
-            return query in searchable
-        tour = [s for s in tour if matches(s)]
+            if query not in searchable:
+                return False
+        return True
+
+    tour = [s for s in tour if matches(s)]
+    is_filtered = bool(query or types or ftypes)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -673,7 +711,7 @@ def route_report_excel(request, route_id):
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    filename = f"{route_id}_report{'_filtered' if query else ''}.xlsx"
+    filename = f"{route_id}_report{'_filtered' if is_filtered else ''}.xlsx"
     resp = HttpResponse(buf, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     resp['Content-Disposition'] = f'attachment; filename="{filename}"'
     return resp

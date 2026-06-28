@@ -984,10 +984,6 @@ function applyFilters(fromSearch) {
     var total   = document.querySelectorAll('.stop-card').length;
     var el = document.getElementById('report-search-count');
     if (el) el.textContent = visible < total ? visible + ' of ' + total + ' stops shown' : '';
-
-    // Sync Excel link with current filters
-    var searchBox = document.getElementById('report-search');
-    updateExcelLink(searchBox ? searchBox.value : '');
 }
 
 function filterSelectAll() {
@@ -1066,21 +1062,13 @@ function filterReport(query) {
     }
     updateExcelLink(query);
 }
-// Update Excel export link with current filters + search query
+// Update Excel export link with current search query
 function updateExcelLink(query) {
     var base = '{% url "survey:route_report_excel" route_id %}';
     var link = document.getElementById('excel-link');
-    if (!link) return;
-
-    var types  = [...document.querySelectorAll('.fc-type:checked')].map(el => el.value);
-    var ftypes = [...document.querySelectorAll('.fc-ftype:checked')].map(el => el.value);
-
-    var params = new URLSearchParams();
-    if (query)         params.set('q',      query);
-    if (types.length)  params.set('types',  types.join(','));
-    if (ftypes.length) params.set('ftypes', ftypes.join(','));
-
-    link.href = base + (params.toString() ? '?' + params.toString() : '');
+    if (link) {
+        link.href = query ? base + '?q=' + encodeURIComponent(query) : base;
+    }
 }
 
 function clearReportSearch() {
