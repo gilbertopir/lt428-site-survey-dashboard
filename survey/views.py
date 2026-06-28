@@ -12,6 +12,7 @@ import pandas as pd
 from django.shortcuts import render, redirect
 from django.http import Http404
 from .services.data_loader import scan_routes, load_route_data, build_tour, get_alignment_coords, get_route_length_m
+from .services.gap_map import get_report_overview_map
 
 
 def overview(request):
@@ -263,6 +264,15 @@ def route_report(request, route_id):
 
     maps_ready = any(s['overview_map_url'] for s in tour)
 
+    # Generate OSM report overview map
+    survey_points = [
+        {'lat': s['lat'], 'lon': s['lon']}
+        for s in tour if s.get('lat') and s.get('lon')
+    ]
+    report_overview_map, ch_interval_m = get_report_overview_map(route_id, route_coords, survey_points)
+    if report_overview_map is None:
+        ch_interval_m = 500
+
     context = {
         'routes':     routes,
         'first_route': list(routes.keys())[0] if routes else None,
@@ -277,6 +287,8 @@ def route_report(request, route_id):
         'ch_min':     tour[0]['chainage'] if tour else 0,
         'ch_max':     tour[-1]['chainage'] if tour else 0,
         'maps_ready': maps_ready,
+        'report_overview_map': report_overview_map,
+        'ch_interval_m':       ch_interval_m,
     }
     return render(request, 'survey/report.html', context)
 
