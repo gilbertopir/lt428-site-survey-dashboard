@@ -428,8 +428,11 @@
                     <th>Status</th>
                     <th>Side</th>
                     <th>Chainage (m)</th>
-                    <th>Usable Length (m)</th>
-                    <th>Vehicle Clearance (m)</th>
+                    <th>Width (m)</th>
+                    <th>Length (m)</th>
+                    <th>Easting</th>
+                    <th>Northing</th>
+                    <th>GPS ±</th>
                     <th>Notes</th>
                     <th>Captured By</th>
                 </tr>
@@ -442,8 +445,11 @@
                     <td>{{ p.Status }}</td>
                     <td>{{ p.Side }}</td>
                     <td>{{ p|get_item:"Mid Chainage (m)"|floatformat:1 }}</td>
-                    <td>{{ p|get_item:"Usable Length (m)"|floatformat:1 }}</td>
-                    <td>{{ p|get_item:"Width (Vehicle Clearance) (m)"|floatformat:1 }}</td>
+                    <td>{{ p|get_item:"Width (m)"|floatformat:1 }}</td>
+                    <td>{{ p|get_item:"Length (m)"|floatformat:1 }}</td>
+                    <td>{{ p|get_item:"Mid Easting"|floatformat:0 }}</td>
+                    <td>{{ p|get_item:"Mid Northing"|floatformat:0 }}</td>
+                    <td>{{ p|get_item:"GPS Accuracy (m)"|floatformat:1 }}</td>
                     <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
                         {{ p.Notes }}</td>
                     <td>{{ p|get_item:"Captured By" }}</td>
@@ -608,8 +614,6 @@ function highlightMarker(id, kind) {
         if (prev) {
             var prevData = activeMarkerId.startsWith('pp-')
                 ? PP.find(function(x) { return x.id === activeMarkerId.replace('pp-',''); })
-                : activeMarkerId.startsWith('structure-')
-                ? STRUCTURES.find(function(x) { return x.id === activeMarkerId.replace('structure-',''); })
                 : FEATURES.find(function(x) { return x.id === activeMarkerId.replace('feature-',''); });
             if (prevData) {
                 if (prevData.kind === 'structure') {
