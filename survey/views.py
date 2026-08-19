@@ -398,6 +398,198 @@ def route_report_excel(request, route_id):
     return resp
 
 
+
+
+def route_report_zip(request, route_id):
+    """Export filtered report as ZIP: Excel with relative photo links + photos/ folder."""
+    import io
+    import zipfile
+    import math
+    import openpyxl
+    from openpyxl.styles import PatternFill, Font, Alignment
+    from openpyxl.utils import get_column_letter
+    from django.http import HttpResponse
+    from django.conf import settings as django_settings
+    from pathlib import Path
+
+    routes = scan_routes()
+    if route_id not in routes:
+        from django.http import Http404
+        raise Http404(f"Route {route_id} not found")
+
+    info = routes[route_id]
+    df_features, df_pp, df_structures, summary = load_route_data(info["xlsx"])
+    tour = build_tour(df_features, df_pp, df_structures)
+
+    # ── Apply same filters as report page ────────────────────────
+    query  = request.GET.get("q", "").strip().lower()
+    types  = [t.strip() for t in request.GET.get("types",  "").split(",") if t.strip()]
+    ftypes = [t.strip() for t in request.GET.get("ftypes", "").split(",") if t.strip()]
+    type_map = {"feature": "Feature", "passing-place": "Passing Place", "structure": "Structure"}
+
+    def matches(stop):
+        stop_kind = stop.get("type", "")
+        if types:
+            kind_key = {v: k for k, v in type_map.items()}.get(stop_kind, "")
+            if kind_key not in types:
+                return False
+        if ftypes and stop_kind == "Feature":
+            if stop.get("label", "") not in ftypes:
+                return False
+        if query:
+            searchable = " ".join([
+                str(stop.get("id", "")), str(stop.get("type", "")),
+                str(stop.get("label", "")), str(stop.get("condition", "")),
+                str(stop.get("side", "")), str(stop.get("notes", "")),
+                str(stop.get("chainage", "")),
+            ]).lower()
+            if query not in searchable:
+                return False
+        return True
+
+    tour = [s for s in tour if matches(s)]
+    is_filtered = bool(query or types or ftypes)
+
+    # ── Photo renaming helper (reuse photo_library logic) ─────────
+    def make_photo_name(stop_id, label, condition, chainage, original, index=None):
+        ext  = original.rsplit(".", 1)[-1] if "." in original else "jpg"
+        ch   = f"CH{float(chainage):.0f}m" if chainage else ""
+        idx  = f"_{index}" if index is not None else ""
+        parts = [p for p in [route_id, stop_id,
+                              label.replace(" ", "_").replace("/", "_"),
+                              condition, ch] if p]
+        return "_".join(parts) + idx + "." + ext
+
+    # ── Collect photos per stop ───────────────────────────────────
+    MEDIA = Path(django_settings.MEDIA_ROOT)
+
+    def get_photos(stop):
+        """Returns list of (src_path, zip_name) tuples."""
+        result = []
+        subfolder_map = {
+            "Feature":       "features",
+            "Passing Place": "passing_places",
+            "Structure":     "structures",
+        }
+        subfolder = subfolder_map.get(stop.get("type", ""), "features")
+        photo_urls = stop.get("photo_urls", [])
+        if not photo_urls:
+            return result
+        # Derive original filenames from URLs
+        for i, url in enumerate(photo_urls):
+            filename = url.split("/")[-1]
+            src = MEDIA / "photos" / subfolder / filename
+            idx = (i + 1) if len(photo_urls) > 1 else None
+            new_name = make_photo_name(
+                stop.get("id", ""),
+                stop.get("label", ""),
+                stop.get("condition", ""),
+                stop.get("chainage"),
+                filename, idx
+            )
+            result.append((src, f"photos/{new_name}"))
+        return result
+
+    # ── Build photo map per stop & find max photo count ──────────
+    stop_photos = {i: get_photos(s) for i, s in enumerate(tour)}
+    max_photos  = max((len(v) for v in stop_photos.values()), default=0)
+
+    # ── Build Excel ───────────────────────────────────────────────
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{route_id} Report"
+
+    hdr_fill  = PatternFill("solid", fgColor="051b63")
+    hdr_font  = Font(bold=True, color="FFFFFF")
+    hdr_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    base_headers = ["Type", "ID", "Label", "Chainage (m)", "Condition / Status",
+                    "Side", "Easting", "Northing", "Notes", "Captured By", "Captured At"]
+    photo_headers = [f"Photo {i+1}" for i in range(max_photos)]
+    all_headers = base_headers + photo_headers
+
+    ws.append(all_headers)
+    for cell in ws[1]:
+        cell.fill      = hdr_fill
+        cell.font      = hdr_font
+        cell.alignment = hdr_align
+    ws.row_dimensions[1].height = 28
+
+    for i, stop in enumerate(tour):
+        specs = {k: v for k, v in stop.get("specs", [])}
+        row_data = [
+            stop.get("type", ""),
+            stop.get("id", ""),
+            stop.get("label", ""),
+            round(float(stop["chainage"]), 1) if stop.get("chainage") else "",
+            stop.get("condition", ""),
+            stop.get("side", ""),
+            stop.get("easting", "") or specs.get("Easting", ""),
+            stop.get("northing", "") or specs.get("Northing", ""),
+            stop.get("notes", ""),
+            specs.get("Captured By", ""),
+            specs.get("Captured At", ""),
+        ]
+        # Pad to base columns
+        while len(row_data) < len(base_headers):
+            row_data.append("")
+
+        # Add photo columns with relative hyperlinks
+        photos = stop_photos.get(i, [])
+        for j in range(max_photos):
+            if j < len(photos):
+                _, zip_name = photos[j]
+                row_data.append(zip_name)  # will add hyperlink below
+            else:
+                row_data.append("")
+
+        ws.append(row_data)
+        row_num = ws.max_row
+
+        # Add hyperlinks to photo cells
+        for j, (_, zip_name) in enumerate(photos):
+            col_idx = len(base_headers) + j + 1
+            cell = ws.cell(row=row_num, column=col_idx)
+            cell.hyperlink = zip_name
+            cell.font      = Font(color="1155CC", underline="single")
+            cell.value     = zip_name.split("/")[-1]
+
+    # Auto-column widths
+    for col in ws.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=8)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 3, 45)
+
+    # ── Build ZIP ─────────────────────────────────────────────────
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Write Excel
+        xls_buf = io.BytesIO()
+        wb.save(xls_buf)
+        xls_buf.seek(0)
+        xls_name = f"{route_id}_report{'_filtered' if is_filtered else ''}.xlsx"
+        zf.writestr(xls_name, xls_buf.read())
+
+        # Write photos
+        seen = {}
+        for photos in stop_photos.values():
+            for src, zip_name in photos:
+                if not Path(src).exists():
+                    continue
+                # Deduplicate
+                if zip_name in seen:
+                    base, ext = zip_name.rsplit(".", 1)
+                    seen[zip_name] += 1
+                    zip_name = f"{base}_{seen[zip_name]}.{ext}"
+                else:
+                    seen[zip_name] = 1
+                zf.write(src, zip_name)
+
+    buf.seek(0)
+    zip_name = f"{route_id}_report{'_filtered' if is_filtered else ''}.zip"
+    resp = HttpResponse(buf, content_type="application/zip")
+    resp["Content-Disposition"] = f'attachment; filename="{zip_name}"'
+    return resp
+
 def route_summary(request, route_id):
     routes = scan_routes()
     if route_id not in routes:

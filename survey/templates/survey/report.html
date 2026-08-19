@@ -514,6 +514,13 @@
               font-weight:700; text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;">
         <i class="bi bi-file-earmark-spreadsheet me-1"></i>Excel
     </a>
+    <a id="zip-link"
+       href="{% url 'survey:route_report_zip' route_id %}"
+       class="btn btn-sm px-3"
+       style="background:#7b2d8b; color:white; font-family:'Roboto Condensed',sans-serif;
+              font-weight:700; text-transform:uppercase; letter-spacing:0.5px; font-size:0.78rem;">
+        <i class="bi bi-file-zip me-1"></i>ZIP + Photos
+    </a>
 </div>
 
 <div class="report-layout">
@@ -1080,7 +1087,15 @@ function updateExcelLink(query) {
     if (types.length)  params.set('types',  types.join(','));
     if (ftypes.length) params.set('ftypes', ftypes.join(','));
 
-    link.href = base + (params.toString() ? '?' + params.toString() : '');
+    var qs = params.toString() ? '?' + params.toString() : '';
+    link.href = base + qs;
+
+    // Sync ZIP link too
+    var zipLink = document.getElementById('zip-link');
+    if (zipLink) {
+        var zipBase = '{% url "survey:route_report_zip" route_id %}';
+        zipLink.href = zipBase + qs;
+    }
 }
 
 function clearReportSearch() {
